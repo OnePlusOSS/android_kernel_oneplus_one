@@ -43,6 +43,11 @@
 	((1 << NF_INET_PRE_ROUTING) | (1 << NF_INET_LOCAL_IN))
 
 
+#ifdef VENDOR_EDIT
+//tanggeliang@Swdp.Android.Kernel, 2014/06/20, Add for tag pid
+#define MAX_UID 10000
+#endif /* VENDOR_EDIT */
+
 static const char *module_procdirname = "xt_qtaguid";
 static struct proc_dir_entry *xt_qtaguid_procdir;
 
@@ -52,6 +57,11 @@ module_param_named(iface_perms, proc_iface_perms, uint, S_IRUGO | S_IWUSR);
 static struct proc_dir_entry *xt_qtaguid_stats_file;
 static unsigned int proc_stats_perms = S_IRUGO;
 module_param_named(stats_perms, proc_stats_perms, uint, S_IRUGO | S_IWUSR);
+
+#ifdef VENDOR_EDIT
+//tanggeliang@Swdp.Android.Kernel, 2014/06/20, Add for tag pid
+static struct proc_dir_entry *xt_qtaguid_stats_pid_file;
+#endif /* VENDOR_EDIT */
 
 static struct proc_dir_entry *xt_qtaguid_ctrl_file;
 
@@ -121,6 +131,10 @@ static struct proc_dir_entry *iface_stat_all_procfile;
 static const char *iface_stat_fmt_procfilename = "iface_stat_fmt";
 static struct proc_dir_entry *iface_stat_fmt_procfile;
 
+#ifdef VENDOR_EDIT
+//tanggeliang@Swdp.Android.Kernel, 2014/09/26, Add for tag pid
+static int qtagpid_reset_stats(void);
+#endif /* VENDOR_EDIT */
 
 /*
  * Ordering of locks:
@@ -223,6 +237,13 @@ static struct proc_dir_entry *iface_stat_fmt_procfile;
 static LIST_HEAD(iface_stat_list);
 static DEFINE_SPINLOCK(iface_stat_list_lock);
 
+#ifdef VENDOR_EDIT
+//tanggeliang@Swdp.Android.Kernel, 2014/06/20, Add for tag pid
+//tanggeliang@Swdp.Android.Kernel, 2014/07/02, Add pid_stat_list
+static DEFINE_SPINLOCK(pid_stat_tree_lock);
+//static LIST_HEAD(pid_stat_list);
+#endif /* VENDOR_EDIT */
+
 static struct rb_root sock_tag_tree = RB_ROOT;
 static DEFINE_SPINLOCK(sock_tag_list_lock);
 
@@ -276,12 +297,18 @@ static struct tag_node *tag_node_tree_search(struct rb_root *root, tag_t tag)
 	while (node) {
 		struct tag_node *data = rb_entry(node, struct tag_node, node);
 		int result;
-		RB_DEBUG("qtaguid: tag_node_tree_search(0x%llx): "
-			 " node=%p data=%p\n", tag, node, data);
+	     #ifdef VENDOR_EDIT
+	    //qiulei, 2014/04/28, Remove useless log
+		//RB_DEBUG("qtaguid: tag_node_tree_search(0x%llx): "
+		//	 " node=%p data=%p\n", tag, node, data);
+		#endif /* VENDOR_EDIT */
 		result = tag_compare(tag, data->tag);
-		RB_DEBUG("qtaguid: tag_node_tree_search(0x%llx): "
-			 " data.tag=0x%llx (uid=%u) res=%d\n",
-			 tag, data->tag, get_uid_from_tag(data->tag), result);
+		#ifdef VENDOR_EDIT
+	    //qiulei, 2014/04/28, Remove useless log
+		//RB_DEBUG("qtaguid: tag_node_tree_search(0x%llx): "
+		//	 " data.tag=0x%llx (uid=%u) res=%d\n",
+		//	 tag, data->tag, get_uid_from_tag(data->tag), result);
+		#endif /* VENDOR_EDIT */
 		if (result < 0)
 			node = node->rb_left;
 		else if (result > 0)
@@ -993,6 +1020,10 @@ static struct iface_stat *iface_alloc(struct net_device *net_dev)
 	}
 	spin_lock_init(&new_iface->tag_stat_list_lock);
 	new_iface->tag_stat_tree = RB_ROOT;
+#ifdef VENDOR_EDIT
+//tanggeliang@Swdp.Android.Kernel, 2014/06/20, Add for tag pid
+	INIT_LIST_HEAD(&new_iface->pid_stat_list);
+#endif /* VENDOR_EDIT */
 	_iface_stat_set_active(new_iface, net_dev, true);
 
 	/*
@@ -1369,6 +1400,118 @@ static void iface_stat_update_from_skb(const struct sk_buff *skb,
 	spin_unlock_bh(&iface_stat_list_lock);
 }
 
+#ifdef VENDOR_EDIT
+//tanggeliang@Swdp.Android.Kernel, 2014/06/20, Add for tag pid
+static int pid_compare(char *t1, char *t2)
+{
+    return strcmp(t1, t2);
+}
+
+static void pid_node_tree_insert(struct pid_node *data, struct rb_root *root)
+{
+	struct rb_node **new = &(root->rb_node), *parent = NULL;
+
+	/* Figure out where to put new node */
+	while (*new) {
+		struct pid_node *this = rb_entry(*new, struct pid_node,
+						 node);
+		int result = pid_compare(data->tag, this->tag);
+		parent = *new;
+		if (result < 0)
+			new = &((*new)->rb_left);
+		else if (result > 0)
+			new = &((*new)->rb_right);
+		else
+			BUG();
+	}
+
+	/* Add new node and rebalance tree. */
+	rb_link_node(&data->node, parent, new);
+	rb_insert_color(&data->node, root);
+}
+
+static void pid_stat_tree_insert(struct pid_stat *data, struct rb_root *root)
+{
+	pid_node_tree_insert(&data->tn, root);
+}
+
+static struct pid_node *pid_node_tree_search(struct rb_root *root, char *tag)
+{
+	struct rb_node *node = root->rb_node;
+
+	while (node) {
+		struct pid_node *data = rb_entry(node, struct pid_node, node);
+		int result;
+		result = pid_compare(tag, data->tag);
+		if (result < 0)
+			node = node->rb_left;
+		else if (result > 0)
+			node = node->rb_right;
+		else
+			return data;
+	}
+	return NULL;
+}
+
+static struct pid_stat *pid_stat_tree_search(struct rb_root *root, char *tag)
+{
+	struct pid_node *node = pid_node_tree_search(root, tag);
+	if (!node)
+		return NULL;
+	return rb_entry(&node->node, struct pid_stat, tn.node);
+}
+
+static int entry_index = 0; /* just for test */
+static struct pid_stat *create_pid_stat(struct tag_stat *tag_entry, char *comm, pid_t pid)
+{
+    struct pid_stat *new_pid_stat_entry = NULL;
+    new_pid_stat_entry = kzalloc(sizeof(*new_pid_stat_entry), GFP_ATOMIC);
+    if (!new_pid_stat_entry) {
+        pr_err("qtaguid: create_pid_stat: tag stat alloc failed\n");
+        goto done;
+    }
+    new_pid_stat_entry->pid = pid;
+    new_pid_stat_entry->uid = tag_entry->tn.tag;
+    new_pid_stat_entry->index = entry_index++; /* just for test */
+    strncpy(new_pid_stat_entry->tn.tag, comm, TASK_COMM_LEN);
+
+    pid_stat_tree_insert(new_pid_stat_entry, &tag_entry->pid_stat_tree);
+    list_add_tail(&new_pid_stat_entry->pslist, &tag_entry->iface_stat->pid_stat_list);
+done:
+    return new_pid_stat_entry;
+}
+
+//caller must hold lock:
+static void pid_stat_update(struct tag_stat *tag_entry, int set,
+		    enum ifs_tx_rx direction, int proto, int bytes)
+{
+    char comm[TASK_COMM_LEN];
+    struct pid_stat *pid_stat_entry;
+    struct task_struct *tsk;
+    pid_t pid;
+
+    if (!current->mm || (current->pid == 0)) {
+        strcpy(comm, "kernel_thread");
+        pid = 0;
+    } else {
+        tsk = get_pid_task(find_get_pid(current->tgid), PIDTYPE_PID);
+	    strncpy(comm, tsk->comm, TASK_COMM_LEN);
+        pid = current->tgid;
+    }
+
+	spin_lock_bh(&pid_stat_tree_lock);
+	
+    spin_lock_bh(&tag_entry->pid_stat_list_lock);
+    pid_stat_entry = pid_stat_tree_search(&tag_entry->pid_stat_tree, comm);
+    if (!pid_stat_entry) {
+        pid_stat_entry = create_pid_stat(tag_entry, comm, pid);
+    }
+    data_counters_update(&pid_stat_entry->counters, set, direction, proto, bytes);
+    spin_unlock_bh(&tag_entry->pid_stat_list_lock);
+	spin_unlock_bh(&pid_stat_tree_lock);
+}
+#endif /* VENDOR_EDIT */
+
 static void tag_stat_update(struct tag_stat *tag_entry,
 			enum ifs_tx_rx direction, int proto, int bytes)
 {
@@ -1383,6 +1526,11 @@ static void tag_stat_update(struct tag_stat *tag_entry,
 	if (tag_entry->parent_counters)
 		data_counters_update(tag_entry->parent_counters, active_set,
 				     direction, proto, bytes);
+#ifdef VENDOR_EDIT
+//tanggeliang@Swdp.Android.Kernel, 2014/06/20, Add for tag pid
+    if (get_uid_from_tag(tag_entry->tn.tag) <= MAX_UID)
+        pid_stat_update(tag_entry, active_set, direction, proto, bytes);
+#endif /* VENDOR_EDIT */
 }
 
 /*
@@ -1403,6 +1551,12 @@ static struct tag_stat *create_if_tag_stat(struct iface_stat *iface_entry,
 		goto done;
 	}
 	new_tag_stat_entry->tn.tag = tag;
+#ifdef VENDOR_EDIT
+//tanggeliang@Swdp.Android.Kernel, 2014/06/20, Add for tag pid
+    new_tag_stat_entry->pid_stat_tree = RB_ROOT;
+    new_tag_stat_entry->iface_stat = iface_entry;
+	spin_lock_init(&new_tag_stat_entry->pid_stat_list_lock);
+#endif /* VENDOR_EDIT */
 	tag_stat_tree_insert(new_tag_stat_entry, &iface_entry->tag_stat_tree);
 done:
 	return new_tag_stat_entry;
@@ -2536,6 +2690,15 @@ static int qtaguid_ctrl_parse(const char *input, int count)
 	case 'u':
 		res = ctrl_cmd_untag(input);
 		break;
+#ifdef VENDOR_EDIT
+	//Peirs@Swdp.Android.FrameworkUi, 2014/09/16, Add for support network state
+	//statistics by process information.
+	case 'r':
+		//printk("------ peirs  qtaguid_ctrl_parse case r begin. -----\n");
+		res = qtagpid_reset_stats();
+		//printk("------ peirs  qtaguid_ctrl_parse case r end. -----\n");
+		break;
+#endif /* VENDOR_EDIT */
 
 	default:
 		res = -EINVAL;
@@ -2572,10 +2735,260 @@ struct proc_print_info {
 	char **num_items_returned;
 	struct iface_stat *iface_entry;
 	struct tag_stat *ts_entry;
+#ifdef VENDOR_EDIT
+//tanggeliang@Swdp.Android.Kernel, 2014/06/20, Add for tag pid
+    struct pid_stat *ps_entry;
+#endif /* VENDOR_EDIT */
 	int item_index;
 	int items_to_skip;
 	int char_count;
 };
+
+#ifdef VENDOR_EDIT
+//tanggeliang@Swdp.Android.Kernel, 2014/06/20, Add for tag pid
+static int pp_stats_line_pid(struct proc_print_info *ppi, int cnt_set)
+{
+	int len;
+	struct data_counters *cnts;
+
+	if (!ppi->item_index) {
+		if (ppi->item_index++ < ppi->items_to_skip)
+			return 0;
+		len = snprintf(ppi->outp, ppi->char_count,
+			       "idx iface acct_tag_hex uid_tag_int cnt_set "
+			       "rx_bytes rx_packets "
+			       "tx_bytes tx_packets "
+                   "pid comm "
+			       "rx_tcp_bytes rx_tcp_packets "
+			       "rx_udp_bytes rx_udp_packets "
+			       "rx_other_bytes rx_other_packets "
+			       "tx_tcp_bytes tx_tcp_packets "
+			       "tx_udp_bytes tx_udp_packets "
+			       "tx_other_bytes tx_other_packets\n");
+	} else {
+        if (ppi->item_index++ < ppi->items_to_skip)
+            return 0;
+        cnts = &ppi->ps_entry->counters;
+        len = snprintf(
+                ppi->outp, ppi->char_count,
+                "%d %s 0x%llx %u %u "
+                "%llu %llu "
+                "%llu %llu "
+                "%d %s "
+                "%llu %llu "
+                "%llu %llu "
+                "%llu %llu "
+                "%llu %llu "
+                "%llu %llu "
+                "%llu %llu %d\n",
+                ppi->item_index,
+                ppi->iface_entry->ifname,
+                get_atag_from_tag(ppi->ps_entry->uid),
+                ppi->ps_entry->uid,
+                cnt_set,
+                dc_sum_bytes(cnts, cnt_set, IFS_RX),
+                dc_sum_packets(cnts, cnt_set, IFS_RX),
+                dc_sum_bytes(cnts, cnt_set, IFS_TX),
+                dc_sum_packets(cnts, cnt_set, IFS_TX),
+                ppi->ps_entry->pid, ppi->ps_entry->tn.tag,
+                cnts->bpc[cnt_set][IFS_RX][IFS_TCP].bytes,
+                cnts->bpc[cnt_set][IFS_RX][IFS_TCP].packets,
+                cnts->bpc[cnt_set][IFS_RX][IFS_UDP].bytes,
+                cnts->bpc[cnt_set][IFS_RX][IFS_UDP].packets,
+                cnts->bpc[cnt_set][IFS_RX][IFS_PROTO_OTHER].bytes,
+                cnts->bpc[cnt_set][IFS_RX][IFS_PROTO_OTHER].packets,
+                cnts->bpc[cnt_set][IFS_TX][IFS_TCP].bytes,
+                cnts->bpc[cnt_set][IFS_TX][IFS_TCP].packets,
+                cnts->bpc[cnt_set][IFS_TX][IFS_UDP].bytes,
+                cnts->bpc[cnt_set][IFS_TX][IFS_UDP].packets,
+                cnts->bpc[cnt_set][IFS_TX][IFS_PROTO_OTHER].bytes,
+                cnts->bpc[cnt_set][IFS_TX][IFS_PROTO_OTHER].packets,
+                ppi->ps_entry->index);
+    }
+    return len;
+}
+
+static bool pp_sets_pid(struct proc_print_info *ppi)
+{
+	int len;
+	int counter_set;
+	for (counter_set = 0; counter_set < IFS_MAX_COUNTER_SETS;
+	     counter_set++) {
+		len = pp_stats_line_pid(ppi, counter_set);
+		if (len >= ppi->char_count) {
+			*ppi->outp = '\0';
+			return false;
+		}
+		if (len) {
+			ppi->outp += len;
+			ppi->char_count -= len;
+			(*ppi->num_items_returned)++;
+		}
+	}
+	return true;
+}
+
+/*
+ * Procfs reader to get all tag stats using style "1)" as described in
+ * fs/proc/generic.c
+ * Groups all protocols tx/rx bytes.
+ */
+static int qtagpid_stats_proc_read(char *page, char **num_items_returned,
+				off_t items_to_skip, int char_count, int *eof,
+				void *data)
+{
+	struct proc_print_info ppi;
+	int len;
+
+	ppi.outp = page;
+	ppi.item_index = 0;
+	ppi.char_count = char_count;
+	ppi.num_items_returned = num_items_returned;
+	ppi.items_to_skip = items_to_skip;
+
+	if (unlikely(module_passive)) {
+		len = pp_stats_line_pid(&ppi, 0);
+		/* The header should always be shorter than the buffer. */
+		BUG_ON(len >= ppi.char_count);
+		(*num_items_returned)++;
+		*eof = 1;
+		return len;
+	}
+
+	CT_DEBUG("qtaguid:proc stats pid=%u tgid=%u uid=%u "
+		 "page=%p *num_items_returned=%p off=%ld "
+		 "char_count=%d *eof=%d\n",
+		 current->pid, current->tgid, current_fsuid(),
+		 page, *num_items_returned,
+		 items_to_skip, char_count, *eof);
+
+	if (*eof)
+		return 0;
+
+	/* The idx is there to help debug when things go belly up. */
+	len = pp_stats_line_pid(&ppi, 0);
+	/* Don't advance the outp unless the whole line was printed */
+	if (len >= ppi.char_count) {
+		*ppi.outp = '\0';
+		return ppi.outp - page;
+	}
+	if (len) {
+		ppi.outp += len;
+		ppi.char_count -= len;
+		(*num_items_returned)++;
+	}
+
+    spin_lock_bh(&iface_stat_list_lock);
+    list_for_each_entry(ppi.iface_entry, &iface_stat_list, list) {
+        spin_lock_bh(&ppi.iface_entry->tag_stat_list_lock);
+        list_for_each_entry(ppi.ps_entry, &ppi.iface_entry->pid_stat_list, pslist) {
+            if (ppi.ps_entry->uid <= MAX_UID) {
+                if (!pp_sets_pid(&ppi)) {
+                    spin_unlock_bh(
+                            &ppi.iface_entry->tag_stat_list_lock);
+                    spin_unlock_bh(&iface_stat_list_lock);
+                    return ppi.outp - page;
+                }
+            }
+        }
+        spin_unlock_bh(&ppi.iface_entry->tag_stat_list_lock);
+    }
+    spin_unlock_bh(&iface_stat_list_lock);
+
+    *eof = 1;
+    return ppi.outp - page;
+}
+
+static int qtagpid_reset_stats(void)
+{
+    struct iface_stat *iface_entry;
+    struct pid_stat *ps_entry;
+	struct tag_stat *ts_entry;
+	struct rb_node *node, *pid_node;
+
+    spin_lock_bh(&iface_stat_list_lock);
+    list_for_each_entry(iface_entry, &iface_stat_list, list) {
+        spin_lock_bh(&iface_entry->tag_stat_list_lock);
+		for (node = rb_first(&iface_entry->tag_stat_tree); node; node = rb_next(node)) {
+			ts_entry = rb_entry(node, struct tag_stat, tn.node);
+		    for (pid_node = rb_first(&ts_entry->pid_stat_tree); pid_node; pid_node = rb_next(pid_node)) {
+                ps_entry = rb_entry(pid_node, struct pid_stat, tn.node);
+                //printk("ps_entry->tn.tag: %s\n", ps_entry->tn.tag);
+                rb_erase(&ps_entry->tn.node, &ts_entry->pid_stat_tree);
+            }
+		}
+
+        while (!list_empty(&iface_entry->pid_stat_list)) {
+            ps_entry = list_entry(iface_entry->pid_stat_list.next, struct pid_stat, pslist);
+            //printk("ps_entry->tn.tag: %s\n", ps_entry->tn.tag);
+            ps_entry->index = 0;
+            list_del(&ps_entry->pslist);
+        }
+        spin_unlock_bh(&iface_entry->tag_stat_list_lock);
+    }
+    spin_unlock_bh(&iface_stat_list_lock);
+
+    return 1;
+}
+
+//Those methods bellow is just for emulate test, when excute this cmd:echo test > proc/net/xt_qtaguid/stats_pid
+//it will create random records for emulate pressure test.
+//Test methods begin:{
+static int t = 0;
+static void qtagpid_test_stats(void)
+{
+    struct iface_stat *iface_entry;
+	struct tag_stat *ts_entry;
+	struct rb_node *node, *pid_node;
+    char comm[TASK_COMM_LEN];
+    struct pid_stat *pid_stat_entry;
+    int set;
+    enum ifs_tx_rx direction;
+    int proto;
+    int bytes;
+    int i;
+
+    spin_lock_bh(&iface_stat_list_lock);
+    list_for_each_entry(iface_entry, &iface_stat_list, list) {
+        spin_lock_bh(&iface_entry->tag_stat_list_lock);
+        for (node = rb_first(&iface_entry->tag_stat_tree); node; node = rb_next(node)) {
+            ts_entry = rb_entry(node, struct tag_stat, tn.node);
+            for (pid_node = rb_first(&ts_entry->pid_stat_tree); pid_node; pid_node = rb_next(pid_node)) {
+                for (i = 0; i < 100; i++) {
+                    spin_lock_bh(&pid_stat_tree_lock);
+                    spin_lock_bh(&ts_entry->pid_stat_list_lock);
+                    sprintf(comm, "test_%d_%d", t, i);
+                    set = 0;
+                    direction = i % 2;
+                    proto = i % 3;
+                    bytes = i;
+                    pid_stat_entry = pid_stat_tree_search(&ts_entry->pid_stat_tree, comm);
+                    if (!pid_stat_entry) {
+                        pid_stat_entry = create_pid_stat(ts_entry, comm, current->pid);
+                    }
+                    data_counters_update(&pid_stat_entry->counters, set, direction, proto, bytes);
+                    spin_unlock_bh(&ts_entry->pid_stat_list_lock);
+                    spin_unlock_bh(&pid_stat_tree_lock);
+                }
+            }
+        }
+        spin_unlock_bh(&iface_entry->tag_stat_list_lock);
+    }
+    spin_unlock_bh(&iface_stat_list_lock);
+    t++;
+}
+
+static int qtagpid_stats_proc_write(struct file *file, const char __user *buffer,
+            unsigned long count, void *data)
+{
+    if (!strncmp(buffer, "reset", count - 1))
+        qtagpid_reset_stats();
+    else if (!strncmp(buffer, "test", count - 1))
+        qtagpid_test_stats();
+    return count;
+}
+//Test methods end.}
+#endif /* VENDOR_EDIT */
 
 static int pp_stats_line(struct proc_print_info *ppi, int cnt_set)
 {
@@ -2949,6 +3362,35 @@ no_dir:
 	return ret;
 }
 
+#ifdef VENDOR_EDIT
+//tanggeliang@Swdp.Android.Kernel, 2014/06/20, Add for tag pid
+static int __init qtagpid_proc_register(struct proc_dir_entry **res_procdir)
+{
+    int ret; 
+
+    xt_qtaguid_stats_pid_file = create_proc_entry("stats_pid", proc_stats_perms,
+            *res_procdir);
+    if (!xt_qtaguid_stats_pid_file) {
+        pr_err("qtagpid: failed to create xt_qtagpid/stats_pid "
+                "file\n");
+        ret = -ENOMEM;
+        goto no_stats_entry;
+    }    
+    xt_qtaguid_stats_pid_file->read_proc = qtagpid_stats_proc_read;
+    //This methods bellow is just for emulate test, when excute this cmd:echo test > proc/net/xt_qtaguid/stats_pid
+    //it will create random records for emulate pressure test.
+    //Test methods begin:{
+    xt_qtaguid_stats_pid_file->write_proc = qtagpid_stats_proc_write;
+    //end.}
+	
+    return 0;
+
+no_stats_entry:
+    remove_proc_entry("stats_pid", *res_procdir);
+    return ret; 
+}
+#endif /* VENDOR_EDIT */
+
 static struct xt_match qtaguid_mt_reg __read_mostly = {
 	/*
 	 * This module masquerades as the "owner" module so that iptables
@@ -2967,7 +3409,12 @@ static int __init qtaguid_mt_init(void)
 	if (qtaguid_proc_register(&xt_qtaguid_procdir)
 	    || iface_stat_init(xt_qtaguid_procdir)
 	    || xt_register_match(&qtaguid_mt_reg)
-	    || misc_register(&qtu_device))
+	    || misc_register(&qtu_device)
+#ifdef VENDOR_EDIT
+//tanggeliang@Swdp.Android.Kernel, 2014/06/20, Add for tag pid
+        || qtagpid_proc_register(&xt_qtaguid_procdir)
+#endif /* VENDOR_EDIT */
+        )
 		return -1;
 	return 0;
 }

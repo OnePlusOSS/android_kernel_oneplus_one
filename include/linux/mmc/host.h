@@ -357,6 +357,10 @@ struct mmc_host {
 	struct wake_lock	detect_wake_lock;
 	const char		*wlock_name;
 	int			detect_change;	/* card detect flag */
+#ifdef VENDOR_EDIT
+//Lycan.Wang@Prd.BasicDrv, 2014-07-10 Add for retry 5 times when new sdcard init error
+    int detect_change_retry;
+#endif /* VENDOR_EDIT */
 	struct mmc_hotplug	hotplug;
 
 	const struct mmc_bus_ops *bus_ops;	/* current bus driver */

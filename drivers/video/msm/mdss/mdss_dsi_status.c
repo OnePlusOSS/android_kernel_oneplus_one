@@ -114,6 +114,12 @@ static int fb_event_callback(struct notifier_block *self,
 			schedule_delayed_work(&pdata->check_status,
 				msecs_to_jiffies(interval));
 			break;
+#ifndef VENDOR_EDIT
+/* liuyan@Onlinerd.driver, 2014/09/15  Add for qualcommm patch for crash into dump */
+		case FB_BLANK_POWERDOWN:
+			cancel_delayed_work(&pdata->check_status);
+			break;
+#else
 		case FB_BLANK_POWERDOWN:
 		case FB_BLANK_HSYNC_SUSPEND:
 		case FB_BLANK_VSYNC_SUSPEND:
@@ -123,6 +129,7 @@ static int fb_event_callback(struct notifier_block *self,
 		default:
 			pr_err("Unknown case in FB_EVENT_BLANK event\n");
 			break;
+#endif /*CONFIG_VENDOR_EDIT*/
 		}
 	}
 	return 0;

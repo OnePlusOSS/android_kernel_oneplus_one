@@ -127,7 +127,13 @@ obj-y				+= ieee802154/
 obj-y				+= clk/
 
 obj-$(CONFIG_HWSPINLOCK)	+= hwspinlock/
-obj-$(CONFIG_NFC)		+= nfc/
+#oppo yuyi 2013-10-11 modify begin for nfc
+#ifndef VENDOR_EDIT
+#obj-$(CONFIG_NFC)		+= nfc/
+#else
+obj-$(CONFIG_NFC_DEVICES)  += nfc/
+#endif VENDOR_EDIT
+#oppo yuyi 2013-10-11 modify end for nfc
 obj-$(CONFIG_IOMMU_SUPPORT)	+= iommu/
 obj-$(CONFIG_REMOTEPROC)	+= remoteproc/
 obj-$(CONFIG_RPMSG)		+= rpmsg/
@@ -145,3 +151,9 @@ obj-$(CONFIG_CORESIGHT)		+= coresight/
 
 obj-$(CONFIG_BIF)		+= bif/
 obj-$(CONFIG_SENSORS)		+= sensors/
+
+#OPPO 2014-05-23 Xinhua.Song added begin for camera motor 
+#ifdef VENDOR_EDIT
+obj-$(CONFIG_CAMERA_MOTOR)  += camera-motor/
+#endif VENDOR_EDIT
+#OPPO 2014-05-23 Xinhua.Song added end

@@ -41,6 +41,10 @@
 #include <linux/delay.h>
 #include <linux/swap.h>
 #include <linux/fs.h>
+#ifdef VENDOR_EDIT
+//Lycan.Wang@Prd.BasicDrv, 2014-07-29 Add for workaround method for SHM memleak
+#include <linux/ipc_namespace.h>
+#endif /* VENDOR_EDIT */
 
 #ifdef CONFIG_HIGHMEM
 #define _ZONE ZONE_HIGHMEM
@@ -345,6 +349,18 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 		set_tsk_thread_flag(selected, TIF_MEMDIE);
 		rem -= selected_tasksize;
 		rcu_read_unlock();
+#ifdef VENDOR_EDIT
+        //Lycan.Wang@Prd.BasicDrv, 2014-07-29 Add for workaround method for SHM memleak
+        if (totalram_pages / global_page_state(NR_SHMEM) < 10) {
+            struct ipc_namespace *ns = current->nsproxy->ipc_ns;
+            int backup_shm_rmid_forced = ns->shm_rmid_forced;
+
+            lowmem_print(1, "Shmem too large (%ldKB)\n Try to release IPC shmem !\n", global_page_state(NR_SHMEM) * (long)(PAGE_SIZE / 1024));
+            ns->shm_rmid_forced = 1;
+            shm_destroy_orphaned(ns);
+            ns->shm_rmid_forced = backup_shm_rmid_forced;
+        }
+#endif /* VENDOR_EDIT */
 		/* give the system time to free up the memory */
 		msleep_interruptible(20);
 	} else

@@ -1123,9 +1123,17 @@ out:
 	if (copied)
 		tcp_push(sk, flags, mss_now, tp->nonagle);
 	release_sock(sk);
-
+#ifndef CONFIG_VENDOR_EDIT
+/* wenxian.zhen@Onlinerd.Driver, 2014/05/06  Add for stactist the data both receive and send  of the progress  */
 	if (copied > 0)
 		uid_stat_tcp_snd(current_uid(), copied);
+#else
+	if (copied > 0)
+		{
+		uid_stat_tcp_snd(current_uid(), copied);
+		pid_stat_tcp_snd(task_tgid_vnr(current), copied);
+		}
+#endif /*CONFIG_VENDOR_EDIT*/
 	return copied;
 
 do_fault:
@@ -1406,6 +1414,10 @@ int tcp_read_sock(struct sock *sk, read_descriptor_t *desc,
 	if (copied > 0) {
 		tcp_cleanup_rbuf(sk, copied);
 		uid_stat_tcp_rcv(current_uid(), copied);
+#ifdef CONFIG_VENDOR_EDIT
+/* wenxian.zhen@Onlinerd.Driver, 2014/05/06  Add for stactist the data both receive and send  of the progress  */
+		pid_stat_tcp_rcv(task_tgid_vnr(current), copied);		
+#endif /*CONFIG_VENDOR_EDIT*/
 	}
 
 	return copied;

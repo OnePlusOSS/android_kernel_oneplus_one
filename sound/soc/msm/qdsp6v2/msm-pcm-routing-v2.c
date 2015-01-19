@@ -77,6 +77,11 @@ static int msm_route_ec_ref_rx = 7; /* NONE */
 static uint32_t voc_session_id = ALL_SESSION_VSID;
 static int msm_route_ext_ec_ref = AFE_PORT_INVALID;
 
+#ifdef CONFIG_OPPO_MSM_14021
+/* xiaojun.lv@PhoneDpt.AudioDrv, 2014/07/26, add for MI2S feedback patch */
+#define MI2S_VI_FB
+#endif
+
 enum {
 	MADNONE,
 	MADAUDIO,
@@ -3273,6 +3278,29 @@ static const struct snd_kcontrol_new slim0_rx_vi_fb_lch_mux =
 	slim0_rx_vi_fb_lch_mux_enum, spkr_prot_get_vi_lch_port,
 	spkr_prot_put_vi_lch_port);
 
+#ifdef CONFIG_OPPO_MSM_14021
+/* xiaojun.lv@PhoneDpt.AudioDrv, 2014/07/26, add for MI2S feedback patch */
+#ifdef MI2S_VI_FB
+static const char * const sec_mi2s_rx_vi_fb_tx_mux_text[] = {
+	"ZERO", "SEC_MI2S_TX"
+};
+
+static const int const sec_mi2s_rx_vi_fb_tx_value[] = {
+	MSM_BACKEND_DAI_MAX, MSM_BACKEND_DAI_SECONDARY_MI2S_TX
+};
+
+static const struct soc_enum sec_mi2s_rx_vi_fb_mux_enum =
+	SOC_VALUE_ENUM_DOUBLE(0, MSM_BACKEND_DAI_SECONDARY_MI2S_RX, 0, 0,
+	ARRAY_SIZE(sec_mi2s_rx_vi_fb_tx_mux_text),
+	sec_mi2s_rx_vi_fb_tx_mux_text, sec_mi2s_rx_vi_fb_tx_value);
+	
+static const struct snd_kcontrol_new sec_mi2s_rx_vi_fb_mux =
+	SOC_DAPM_ENUM_EXT("SEC_MI2S_RX_VI_FB_MUX",
+	sec_mi2s_rx_vi_fb_mux_enum, spkr_prot_get_vi_lch_port,
+	spkr_prot_put_vi_lch_port);
+#endif
+#endif
+
 static const struct snd_soc_dapm_widget msm_qdsp6_widgets[] = {
 	/* Frontend AIF */
 	/* Widget name equals to Front-End DAI name<Need confirmation>,
@@ -3334,7 +3362,10 @@ static const struct snd_soc_dapm_widget msm_qdsp6_widgets[] = {
 	SND_SOC_DAPM_AIF_IN("SEC_MI2S_DL_HL",
 		"Secondary MI2S_RX Hostless Playback",
 		0, 0, 0, 0),
-
+#ifdef CONFIG_OPPO_MSM_14021
+/* xiaojun.lv@PhoneDpt.AudioDrv, 2014/07/26, add for MI2S feedback patch */		
+	SND_SOC_DAPM_AIF_OUT("SEC_MI2S_UL_HL", "Secondary MI2S Hostless Capture", 0, 0, 0, 0),
+#endif	
 	SND_SOC_DAPM_AIF_IN("AUXPCM_DL_HL", "AUXPCM_HOSTLESS Playback",
 		0, 0, 0, 0),
 	SND_SOC_DAPM_AIF_OUT("AUXPCM_UL_HL", "AUXPCM_HOSTLESS Capture",
@@ -3453,6 +3484,13 @@ static const struct snd_soc_dapm_widget msm_qdsp6_widgets[] = {
 				&fm_switch_mixer_controls),
 	SND_SOC_DAPM_SWITCH("PCM_RX_DL_HL", SND_SOC_NOPM, 0, 0,
 				&pcm_rx_switch_mixer_controls),
+	/*OPPO 2014-07-01 zhzhyon Add for loopback*/
+	#ifdef CONFIG_OPPO_MSM_14021
+	SND_SOC_DAPM_SWITCH("SECMI2S_DL_HL", SND_SOC_NOPM, 0, 0,
+				&fm_switch_mixer_controls),
+	#endif
+	/*OPPO 2014-07-01 zhzhyon Add end*/
+	
 	SND_SOC_DAPM_SWITCH("PRI_MI2S_RX_DL_HL", SND_SOC_NOPM, 0, 0,
 				&pri_mi2s_rx_switch_mixer_controls),
 
@@ -3646,6 +3684,14 @@ static const struct snd_soc_dapm_widget msm_qdsp6_widgets[] = {
 		&ext_ec_ref_mux_ul8),
 	SND_SOC_DAPM_MUX("AUDIO_REF_EC_UL9 MUX", SND_SOC_NOPM, 0, 0,
 		&ext_ec_ref_mux_ul9),
+
+#ifdef CONFIG_OPPO_MSM_14021
+/* xiaojun.lv@PhoneDpt.AudioDrv, 2014/07/26, add for MI2S feedback patch */
+#ifdef MI2S_VI_FB
+	SND_SOC_DAPM_MUX("SEC_MI2S_RX_VI_FB_MUX", SND_SOC_NOPM, 0, 0,
+				&sec_mi2s_rx_vi_fb_mux),
+#endif
+#endif
 };
 
 static const struct snd_soc_dapm_route intercon[] = {
@@ -3756,6 +3802,14 @@ static const struct snd_soc_dapm_route intercon[] = {
 
 	{"SEC_MI2S_RX Port Mixer", "PRI_MI2S_TX", "PRI_MI2S_TX"},
 	{"SEC_MI2S_RX Port Mixer", "INTERNAL_FM_TX", "INT_FM_TX"},
+
+	
+	/*OPPO 2014-07-01 zhzhyon Add for loopback*/
+	#ifdef CONFIG_OPPO_MSM_14021
+	{"SEC_MI2S_RX Port Mixer", "SLIM_0_TX", "SLIMBUS_0_TX"},
+	#endif
+	/*OPPO 2014-07-01 zhzhyon Add end*/
+
 
 	{"PRI_MI2S_RX Audio Mixer", "MultiMedia1", "MM_DL1"},
 	{"PRI_MI2S_RX Audio Mixer", "MultiMedia2", "MM_DL2"},
@@ -4070,6 +4124,12 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"SLIM1_UL_HL", NULL, "SLIMBUS_1_TX"},
 	{"SLIM3_UL_HL", NULL, "SLIMBUS_3_TX"},
 	{"SLIM4_UL_HL", NULL, "SLIMBUS_4_TX"},
+	/*OPPO 2014-07-01 zhzhyon Add for loopback to mi2s*/
+	#ifdef CONFIG_OPPO_MSM_14021
+	{"SECMI2S_DL_HL", "Switch", "SLIM0_DL_HL"},
+	{"SEC_MI2S_RX", NULL, "SECMI2S_DL_HL"},
+	#endif
+	/*OPPO 2014-07-01 zhzhyon Add end*/
 
 	{"LSM1 MUX", "SLIMBUS_0_TX", "SLIMBUS_0_TX"},
 	{"LSM1 MUX", "SLIMBUS_1_TX", "SLIMBUS_1_TX"},
@@ -4159,6 +4219,10 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"SEC_I2S_RX", NULL, "SEC_I2S_DL_HL"},
 	{"PRI_MI2S_UL_HL", NULL, "PRI_MI2S_TX"},
 	{"SEC_MI2S_RX", NULL, "SEC_MI2S_DL_HL"},
+#ifdef CONFIG_OPPO_MSM_14021
+/* xiaojun.lv@PhoneDpt.AudioDrv, 2014/07/26, add for MI2S feedback patch */	
+	{"SEC_MI2S_UL_HL", NULL, "SEC_MI2S_TX"},
+#endif
 
 	{"SLIMBUS_0_RX Port Mixer", "INTERNAL_FM_TX", "INT_FM_TX"},
 	{"SLIMBUS_0_RX Port Mixer", "SLIM_0_TX", "SLIMBUS_0_TX"},
@@ -4270,6 +4334,14 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"INCALL_RECORD_RX", NULL, "BE_IN"},
 	{"SLIM0_RX_VI_FB_LCH_MUX", "SLIM4_TX", "SLIMBUS_4_TX"},
 	{"SLIMBUS_0_RX", NULL, "SLIM0_RX_VI_FB_LCH_MUX"},
+
+#ifdef CONFIG_OPPO_MSM_14021
+/* xiaojun.lv@PhoneDpt.AudioDrv, 2014/07/26, add for MI2S feedback patch */
+#ifdef MI2S_VI_FB	
+	{"SEC_MI2S_RX_VI_FB_MUX", "SEC_MI2S_TX", "SEC_MI2S_TX"},
+	{"SEC_MI2S_RX", NULL, "SEC_MI2S_RX_VI_FB_MUX"},
+#endif
+#endif
 };
 
 static int msm_pcm_routing_hw_params(struct snd_pcm_substream *substream,

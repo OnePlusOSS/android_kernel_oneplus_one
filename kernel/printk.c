@@ -41,6 +41,7 @@
 #include <linux/cpu.h>
 #include <linux/notifier.h>
 #include <linux/rculist.h>
+#include <linux/rtc.h>
 
 #include <asm/uaccess.h>
 
@@ -148,7 +149,7 @@ static int console_may_schedule;
 
 #ifdef CONFIG_PRINTK
 
-static char __log_buf[__LOG_BUF_LEN];
+char __log_buf[__LOG_BUF_LEN];
 static char *log_buf = __log_buf;
 static int log_buf_len = __LOG_BUF_LEN;
 static unsigned logged_chars; /* Number of chars produced since last read+clear operation */
@@ -755,6 +756,10 @@ static bool printk_time = 0;
 #endif
 module_param_named(time, printk_time, bool, S_IRUGO | S_IWUSR);
 
+static bool print_wall_time = 1;
+module_param_named(print_wall_time, print_wall_time, bool, S_IRUGO | S_IWUSR);
+
+
 static bool always_kmsg_dump;
 module_param_named(always_kmsg_dump, always_kmsg_dump, bool, S_IRUGO | S_IWUSR);
 
@@ -888,6 +893,7 @@ static inline void printk_delay(void)
 		}
 	}
 }
+void getnstimeofday_no_nsecs(struct timespec *ts);
 
 asmlinkage int vprintk(const char *fmt, va_list args)
 {
@@ -898,6 +904,10 @@ asmlinkage int vprintk(const char *fmt, va_list args)
 	char *p;
 	size_t plen;
 	char special;
+	struct timespec ts;
+	struct rtc_time tm;
+
+
 
 	boot_delay_msec();
 	printk_delay();
@@ -989,12 +999,26 @@ asmlinkage int vprintk(const char *fmt, va_list args)
 				unsigned long long t;
 				unsigned long nanosec_rem;
 
-				t = cpu_clock(printk_cpu);
-				nanosec_rem = do_div(t, 1000000000);
-				tlen = sprintf(tbuf, "[%5lu.%06lu] ",
-						(unsigned long) t,
-						nanosec_rem / 1000);
 
+
+				if(print_wall_time){
+					t = cpu_clock(printk_cpu);
+					nanosec_rem = do_div(t, 1000000000);
+					getnstimeofday_no_nsecs(&ts);
+					ts.tv_sec += 8*60*60; //Trasfer to Beijing time, UTC + 8
+					rtc_time_to_tm(ts.tv_sec, &tm);
+
+					tlen = sprintf(tbuf, "[%02d%02d%02d_%02d:%02d:%02d.%06lu]@%d ",
+									tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+									tm.tm_hour, tm.tm_min, tm.tm_sec, nanosec_rem/1000,smp_processor_id());
+
+				}else{
+					t = cpu_clock(printk_cpu);
+					nanosec_rem = do_div(t, 1000000000);
+					tlen = sprintf(tbuf, "[%5lu.%06lu] ",
+							(unsigned long) t,
+							nanosec_rem / 1000);
+				}
 				for (tp = tbuf; tp < tbuf + tlen; tp++)
 					emit_log_char(*tp);
 				printed_len += tlen;

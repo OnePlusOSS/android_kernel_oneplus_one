@@ -41,6 +41,7 @@
 #include <mach/msm_bus.h>
 #include <mach/mpm.h>
 #include <linux/iopoll.h>
+#include <linux/pcb_version.h>
 
 #include "sdhci-pltfm.h"
 
@@ -346,6 +347,9 @@ enum vdd_io_level {
 	 */
 	VDD_IO_SET_LEVEL,
 };
+
+extern unsigned int	mmc_mid;//added by songxh
+extern unsigned int	is_samsung64g;//added by songxh
 
 /* MSM platform specific tuning */
 static inline int msm_dll_poll_ck_out_en(struct sdhci_host *host,
@@ -801,6 +805,15 @@ int sdhci_msm_execute_tuning(struct sdhci_host *host, u32 opcode)
 	struct mmc_ios	ios = host->mmc->ios;
 	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
 	struct sdhci_msm_host *msm_host = pltfm_host->priv;
+#ifdef VENDOR_EDIT
+	//add  by liwei for add status command search after tuning, 20150319
+	struct mmc_command status_cmd = {0};
+	int failed_get_status = 0;
+	int retry_get_status = 5;
+	int retries = 3;
+	struct mmc_card *card = host->mmc->card;
+	//end  by liwei for add status command search after tuning, 20150319
+#endif
 
 	/*
 	 * Tuning is required for SDR104, HS200 and HS400 cards and
@@ -920,9 +933,30 @@ retry:
 		rc = -EIO;
 	}
 
+
 kfree:
 	kfree(data_buf);
 out:
+#ifdef VENDOR_EDIT
+
+	//add  by liwei for add status command search after tuning, 20150319
+    if(is_samsung64g && (mmc_mid == 0x15)){
+		while(retry_get_status--){
+			if((card == NULL)||( card->host  == NULL)){
+				break;
+			}
+			status_cmd.opcode = MMC_SEND_STATUS;
+			if (!mmc_host_is_spi(card->host))
+				status_cmd.arg = card->rca << 16;
+			status_cmd.flags = MMC_RSP_SPI_R2 | MMC_RSP_R1 | MMC_CMD_AC;
+			failed_get_status = mmc_wait_for_cmd(card->host, &status_cmd, retries);
+			if (failed_get_status == 0)
+				break;
+			msleep(10);
+		}
+	}
+	//add  by liwei for add status command search after tuning, 20150319
+#endif
 	spin_lock_irqsave(&host->lock, flags);
 	if (!rc)
 		msm_host->tuning_done = true;
@@ -2759,6 +2793,18 @@ static int __devinit sdhci_msm_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "No device tree node\n");
 		goto pltfm_free;
 	}
+
+#ifdef CONFIG_OPPO_MSM_14021
+//Zhilong.Zhang@OnlineRd.Driver, 2014/08/09, Add for enable TF ldo
+	if (get_pcb_version() >= HW_VERSION__31) {
+		printk(KERN_INFO "enable TF ldo\n");
+		ret = gpio_tlmm_config(GPIO_CFG(75, 0, 1, 1, 0), 0);
+		if (ret) {
+			printk(KERN_ERR "%s:gpio_tlmm_config(%#x)=%d\n", __func__, GPIO_CFG(75, 0, 1, 1, 0), ret);
+		}
+		gpio_set_value(75, 1);
+	}
+#endif	
 
 	/* Setup Clocks */
 

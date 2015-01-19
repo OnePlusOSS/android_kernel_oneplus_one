@@ -24,6 +24,11 @@
 #include <mach/socinfo.h>
 #include <asm/cputype.h>
 #include "acpuclock.h"
+#ifdef CONFIG_VENDOR_EDIT
+// Jingchun.Wang@Phone.Bsp.Driver, 2014/07/16  Add for print cpu freq 
+#include <linux/cpufreq.h>
+#endif /*CONFIG_VENDOR_EDIT*/
+
 
 #define CESR_DCTPE		BIT(0)
 #define CESR_DCDPE		BIT(1)
@@ -294,6 +299,10 @@ static irqreturn_t msm_l1_erp_irq(int irq, void *dev_id)
 		pr_alert("L1 / TLB Error detected on CPU %d!\n", cpu);
 		pr_alert("\tCESR      = 0x%08x\n", cesr);
 		pr_alert("\tCPU speed = %lu\n", acpuclk_get_rate(cpu));
+#ifdef CONFIG_VENDOR_EDIT
+// Jingchun.Wang@Phone.Bsp.Driver, 2014/07/16  Add for print cpu freq 
+		pr_alert("\tCPU = %u\n", cpufreq_get(cpu));
+#endif /*CONFIG_VENDOR_EDIT*/
 		pr_alert("\tMIDR      = 0x%08x\n", read_cpuid_id());
 		msm_erp_dump_regions();
 	}

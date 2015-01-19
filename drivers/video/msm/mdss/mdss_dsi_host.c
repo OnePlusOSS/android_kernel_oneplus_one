@@ -22,7 +22,11 @@
 #include <linux/kthread.h>
 
 #include <mach/iommu_domains.h>
-
+#ifdef VENDOR_EDIT
+/* liuyan@Onlinerd.driver, 2014/10/17  Add for get panel power information */
+#include <linux/regulator/driver.h>
+#include "mdss_io_util.h"
+#endif /*CONFIG_VENDOR_EDIT*/
 #include "mdss.h"
 #include "mdss_dsi.h"
 #include "mdss_panel.h"
@@ -30,8 +34,24 @@
 
 #define VSYNC_PERIOD 17
 
+
 struct mdss_dsi_ctrl_pdata *ctrl_list[DSI_CTRL_MAX];
 
+#ifdef VENDOR_EDIT
+/* liuyan@Onlinerd.driver, 2014/10/17  Add for get panel power information */
+struct regulator {
+	struct device *dev;
+	struct list_head list;
+	int uA_load;
+	int min_uV;
+	int max_uV;
+	int enabled;
+	char *supply_name;
+	struct device_attribute dev_attr;
+	struct regulator_dev *rdev;
+	struct dentry *debugfs;
+};
+#endif /*CONFIG_VENDOR_EDIT*/
 struct mdss_hw mdss_dsi0_hw = {
 	.hw_ndx = MDSS_HW_DSI0,
 	.ptr = NULL,
@@ -1340,7 +1360,12 @@ int mdss_dsi_cmdlist_commit(struct mdss_dsi_ctrl_pdata *ctrl, int from_mdp)
 	 * also, axi bus bandwidth need since dsi controller will
 	 * fetch dcs commands from axi bus
 	 */
+#ifndef VENDOR_EDIT
+/* liuyan@Onlinerd.driver, 2014/09/15  Add for qualcomm patch for crash into dump */
+	mdss_bus_bandwidth_ctrl(1);
+#else
 	mdss_bus_scale_set_quota(MDSS_HW_DSI0, SZ_1M, SZ_1M);
+#endif /*CONFIG_VENDOR_EDIT*/
 
 	pr_debug("%s:  from_mdp=%d pid=%d\n", __func__, from_mdp, current->pid);
 	mdss_dsi_clk_ctrl(ctrl, DSI_ALL_CLKS, 1);
@@ -1352,7 +1377,7 @@ int mdss_dsi_cmdlist_commit(struct mdss_dsi_ctrl_pdata *ctrl, int from_mdp)
 		return rc;
 	}
 
-	if (req->flags & CMD_REQ_HS_MODE)
+      	if (req->flags & CMD_REQ_HS_MODE)
 		mdss_dsi_set_tx_power_mode(0, &ctrl->panel_data);
 
 	if (req->flags & CMD_REQ_RX)
@@ -1365,7 +1390,13 @@ int mdss_dsi_cmdlist_commit(struct mdss_dsi_ctrl_pdata *ctrl, int from_mdp)
 
 	mdss_iommu_ctrl(0);
 	mdss_dsi_clk_ctrl(ctrl, DSI_ALL_CLKS, 0);
+#ifndef VENDOR_EDIT
+/* liuyan@Onlinerd.driver, 2014/09/15  Add for qualcomm patch for crash into dump */
+	mdss_bus_bandwidth_ctrl(0);
+#else
 	mdss_bus_scale_set_quota(MDSS_HW_DSI0, 0, 0);
+#endif /*CONFIG_VENDOR_EDIT*/
+
 need_lock:
 
 	if (from_mdp) /* from pipe_commit */
@@ -1382,6 +1413,10 @@ void mdss_dsi_debug_check_te(struct mdss_panel_data *pdata)
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
 	u8 rc, te_count = 0;
 	u8 te_max = 250;
+#ifdef VENDOR_EDIT
+/* liuyan@Onlinerd.driver, 2014/10/17  Add for get panel power information */
+	int i;
+#endif /*CONFIG_VENDOR_EDIT*/
 
 	if (pdata == NULL) {
 		pr_err("%s: Invalid input data\n", __func__);
@@ -1408,6 +1443,17 @@ void mdss_dsi_debug_check_te(struct mdss_panel_data *pdata)
 		 */
 		udelay(80);
 	}
+#ifdef VENDOR_EDIT
+/* liuyan@Onlinerd.driver, 2014/10/17  Add for get panel powerinformation */
+	if(te_count>=250){
+	    for(i = ctrl_pdata->power_data.num_vreg-1; i >= 0; i--){
+               pr_info("mdss regulator %s %d\n",ctrl_pdata->power_data.vreg_config[i].vreg_name,
+			   	                                     ctrl_pdata->power_data.vreg_config[i].vreg->rdev->use_count);
+	    }
+	   pr_info("mdss panle gpio58 %d\n",gpio_get_value(58));
+	   pr_info("mdss panle gpio76 %d\n",gpio_get_value(76));
+	}
+#endif /*CONFIG_VENDOR_EDIT*/
 	pr_info(" ============ finish waiting for TE ============\n");
 }
 
@@ -1467,10 +1513,16 @@ static int dsi_event_thread(void *data)
 		if (todo & DSI_EV_MDP_FIFO_UNDERFLOW) {
 			mutex_lock(&ctrl->mutex);
 			if (ctrl->recovery) {
+                           #ifdef VENDOR_EDIT
+                           /* liuyan@Onlinerd.driver, 2014/09/15  Add for qualcomm patch for crash into dump */
 				mdss_dsi_clk_ctrl(ctrl, DSI_ALL_CLKS, 1);
+                            #endif /*CONFIG_VENDOR_EDIT*/
 				mdss_dsi_sw_reset_restore(ctrl);
 				ctrl->recovery->fxn(ctrl->recovery->data);
+                            #ifdef VENDOR_EDIT
+                            /* liuyan@Onlinerd.driver, 2014/09/15  Add for qualcomm patch for crash into dump */
 				mdss_dsi_clk_ctrl(ctrl, DSI_ALL_CLKS, 0);
+                            #endif /*CONFIG_VENDOR_EDIT*/
 			}
 			mutex_unlock(&ctrl->mutex);
 		}
@@ -1479,16 +1531,31 @@ static int dsi_event_thread(void *data)
 			mdss_dsi_sw_reset_restore(ctrl);
 
 		if (todo & DSI_EV_MDP_BUSY_RELEASE) {
+                     #ifndef VENDOR_EDIT
+                     /* liuyan@Onlinerd.driver, 2014/09/15  Add for qualcomm patch for crash into dump */
+			spin_lock(&ctrl->mdp_lock);
+			#else
 			spin_lock_irqsave(&ctrl->mdp_lock, flag);
+                     #endif /*CONFIG_VENDOR_EDIT*/
 			ctrl->mdp_busy = false;
 			mdss_dsi_disable_irq_nosync(ctrl, DSI_MDP_TERM);
 			complete(&ctrl->mdp_comp);
+                     #ifndef VENDOR_EDIT
+                      /* liuyan@Onlinerd.driver, 2014/09/15  Add for qualcomm patch for crash into dump */
+			spin_unlock(&ctrl->mdp_lock);
+			#else
 			spin_unlock_irqrestore(&ctrl->mdp_lock, flag);
+                     #endif /*CONFIG_VENDOR_EDIT*/
 
 			/* enable dsi error interrupt */
+                    #ifdef VENDOR_EDIT
 			mdss_dsi_clk_ctrl(ctrl, DSI_ALL_CLKS, 1);
+                     #endif /*CONFIG_VENDOR_EDIT*/
 			mdss_dsi_err_intr_ctrl(ctrl, DSI_INTR_ERROR_MASK, 1);
+                     #ifdef VENDOR_EDIT
+                     /* liuyan@Onlinerd.driver, 2014/09/15  Add for qualcomm patch for crash into dump */
 			mdss_dsi_clk_ctrl(ctrl, DSI_ALL_CLKS, 0);
+                     #endif /*CONFIG_VENDOR_EDIT*/
 		}
 
 	}

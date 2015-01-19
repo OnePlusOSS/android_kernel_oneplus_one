@@ -451,7 +451,12 @@ z180_cmdstream_issueibcmds(struct kgsl_device_private *dev_priv,
 			     "Cannot make kernel mapping for gpuaddr 0x%x\n",
 			     cmd);
 		result = -EINVAL;
+#ifndef VENDOR_EDIT
+/* liuyan@Onlinerd.driver, 2014/07/09  Add for qualcomm kgsl patch */
 		goto error;
+#else
+		goto error_put;
+#endif /*CONFIG_VENDOR_EDIT*/
 	}
 
 	KGSL_CMD_INFO(device, "ctxt %d ibaddr 0x%08x sizedwords %d\n",
@@ -480,7 +485,12 @@ z180_cmdstream_issueibcmds(struct kgsl_device_private *dev_priv,
 	if (result < 0) {
 		KGSL_CMD_ERR(device, "wait_event_interruptible_timeout "
 			"failed: %ld\n", result);
+#ifndef VENDOR_EDIT
+/* liuyan@Onlinerd.driver, 2014/07/09  Add for qualcomm kgsl patch */
 		goto error;
+#else
+		goto error_put;
+#endif /*CONFIG_VENDOR_EDIT*/
 	}
 	result = 0;
 
@@ -512,6 +522,11 @@ z180_cmdstream_issueibcmds(struct kgsl_device_private *dev_priv,
 
 	z180_cmdwindow_write(device, ADDR_VGV3_CONTROL, cmd);
 	z180_cmdwindow_write(device, ADDR_VGV3_CONTROL, 0);
+#ifdef VENDOR_EDIT
+/* liuyan@Onlinerd.driver, 2014/07/09  Add for qualcomm kgsl patch */
+error_put:
+	kgsl_mem_entry_put(entry);
+#endif /*CONFIG_VENDOR_EDIT*/
 error:
 	kgsl_trace_issueibcmds(device, context->id, cmdbatch,
 		*timestamp, cmdbatch ? cmdbatch->flags : 0, result, 0);

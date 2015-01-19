@@ -1610,7 +1610,14 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
 
 	smp_wmb();
 	raw_spin_lock_irqsave(&p->pi_lock, flags);
+#ifndef VENDOR_EDIT
+//Zhilong.Zhang@OnlineRd.Driver, 2014/08/20, Modify for Qualcomm patch, solve the NULL point problem when the aging test
+//patch: https://www.codeaurora.org/cgit/quic/la//kernel/msm-3.10/commit/?id=08e6f9b8832b789352c1b133ceec30338b28a7e3	
+	src_cpu = task_cpu(p);
+	cpu = src_cpu;
+#else
 	src_cpu = cpu = task_cpu(p);
+#endif /* VENDOR_EDIT */
 
 	if (!(p->state & state))
 		goto out;
@@ -1652,9 +1659,12 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
 		p->sched_class->task_waking(p);
 
 	cpu = select_task_rq(p, SD_BALANCE_WAKE, wake_flags);
-
+#ifdef VENDOR_EDIT
+//Zhilong.Zhang@OnlineRd.Driver, 2014/08/20, Modify for Qualcomm patch, solve the NULL point problem when the aging test
+//patch: https://www.codeaurora.org/cgit/quic/la//kernel/msm-3.10/commit/?id=08e6f9b8832b789352c1b133ceec30338b28a7e3
 	/* Refresh src_cpu as it could have changed since we last read it */
 	src_cpu = task_cpu(p);
+#endif /* VENDOR_EDIT */
 	if (src_cpu != cpu) {
 		wake_flags |= WF_MIGRATED;
 		set_task_cpu(p, cpu);

@@ -37,6 +37,10 @@ const char *const pm_states[PM_SUSPEND_MAX] = {
 	[PM_SUSPEND_MEM]	= "mem",
 };
 
+extern void regulator_suspend_dump(void);
+extern void gpiolib_dump(void);
+
+
 static const struct platform_suspend_ops *suspend_ops;
 
 /**
@@ -172,8 +176,12 @@ static int suspend_enter(suspend_state_t state, bool *wakeup)
 	if (!error) {
 		*wakeup = pm_wakeup_pending();
 		if (!(suspend_test(TEST_CORE) || *wakeup)) {
-			error = suspend_ops->enter(state);
+			dump_clk_enabled = true;
+			gpiolib_dump();
+			regulator_suspend_dump();
+			error = suspend_ops->enter(state);//here will dump enable clocks
 			events_check_enabled = false;
+			dump_clk_enabled = false;
 		}
 		syscore_resume();
 	}

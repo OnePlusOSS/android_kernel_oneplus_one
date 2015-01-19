@@ -354,6 +354,15 @@ config BACKLIGHT_OT200
 	  To compile this driver as a module, choose M here: the module will be
 	  called ot200_bl.
 
+config LM3630_BL
+	bool "lcd backlight lm3630 driver"
+	#depends on I2C
+	default y
+	---help---
+	  Support for panel backlight	  
+
+
+
 config BACKLIGHT_PANDORA
 	tristate "Backlight driver for Pandora console"
 	depends on TWL4030_CORE

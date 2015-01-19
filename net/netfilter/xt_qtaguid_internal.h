@@ -204,6 +204,26 @@ struct tag_node {
 	tag_t tag;
 };
 
+#ifdef VENDOR_EDIT
+//tanggeliang@Swdp.Android.Kernel, 2014/06/20, Add for tag pid
+//tanggeliang@Swdp.Android.Kernel, 2014/07/02, add list_head pslist
+#include <linux/sched.h>
+
+struct pid_node {
+    struct rb_node node;
+    char tag[TASK_COMM_LEN];
+};
+
+struct pid_stat {
+	struct pid_node tn;
+    struct data_counters counters;
+    pid_t pid;
+    uid_t uid;
+    int index;
+    struct list_head pslist;
+};
+#endif /* VENDOR_EDIT */
+
 struct tag_stat {
 	struct tag_node tn;
 	struct data_counters counters;
@@ -212,6 +232,12 @@ struct tag_stat {
 	 * matching parent uid_tag.
 	 */
 	struct data_counters *parent_counters;
+#ifdef VENDOR_EDIT
+//tanggeliang@Swdp.Android.Kernel, 2014/06/20, Add for tag pid
+	struct rb_root pid_stat_tree;
+	spinlock_t pid_stat_list_lock;
+    struct iface_stat *iface_stat;
+#endif /* VENDOR_EDIT */
 };
 
 struct iface_stat {
@@ -238,6 +264,10 @@ struct iface_stat {
 	struct proc_dir_entry *proc_ptr;
 
 	struct rb_root tag_stat_tree;
+#ifdef VENDOR_EDIT
+//tanggeliang@Swdp.Android.Kernel, 2014/06/20, Add for tag pid
+    struct list_head pid_stat_list;
+#endif /* VENDOR_EDIT */
 	spinlock_t tag_stat_list_lock;
 };
 

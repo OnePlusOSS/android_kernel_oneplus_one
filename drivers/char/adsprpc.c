@@ -197,6 +197,11 @@ struct file_data {
 	spinlock_t hlock;
 	struct hlist_head hlst;
 	uint32_t mode;
+#ifdef VENDOR_EDIT	
+/* xiaojun.lv@PhoneSW.AudioDrv, 2014/10/18, add patch for bug 515596, enter camera, 
+ * adsp crashed. case id 01758302 */
+	int tgid;
+#endif
 };
 
 struct fastrpc_device {
@@ -941,8 +946,13 @@ static void add_dev(struct fastrpc_apps *me, struct fastrpc_device *dev)
 	spin_unlock(&me->hlock);
 	return;
 }
-
+#ifdef VENDOR_EDIT	
+/* xiaojun.lv@PhoneSW.AudioDrv, 2014/10/18, modify patch for bug 515596, enter camera, 
+ * adsp crashed. case id 01758302 */
+static int fastrpc_release_current_dsp_process(struct file_data *fdata);
+#else
 static int fastrpc_release_current_dsp_process(void);
+#endif
 
 static int fastrpc_internal_invoke(struct fastrpc_apps *me, uint32_t mode,
 			uint32_t kernel,
@@ -1038,16 +1048,26 @@ static int fastrpc_create_current_dsp_process(void)
 		FASTRPC_MODE_PARALLEL, 1, &ioctl)));
 	return err;
 }
-
+#ifdef VENDOR_EDIT	
+/* xiaojun.lv@PhoneSW.AudioDrv, 2014/10/18, modify patch for bug 515596, enter camera, 
+ * adsp crashed. case id 01758302 */
+static int fastrpc_release_current_dsp_process(struct file_data *fdata)
+#else
 static int fastrpc_release_current_dsp_process(void)
+#endif
 {
 	int err = 0;
 	struct fastrpc_apps *me = &gfa;
 	struct fastrpc_ioctl_invoke_fd ioctl;
 	remote_arg_t ra[1];
 	int tgid = 0;
-
-	tgid = current->tgid;
+#ifdef VENDOR_EDIT	
+/* xiaojun.lv@PhoneSW.AudioDrv, 2014/10/18, modify patch for bug 515596, enter camera, 
+ * adsp crashed. case id 01758302 */
+	tgid = fdata->tgid;
+#else
+    tgid = current->tgid;
+#endif
 	ra[0].buf.pv = &tgid;
 	ra[0].buf.len = sizeof(tgid);
 	ioctl.inv.handle = 1;
@@ -1267,8 +1287,13 @@ static int fastrpc_device_release(struct inode *inode, struct file *file)
 {
 	struct file_data *fdata = (struct file_data *)file->private_data;
 	struct fastrpc_apps *me = &gfa;
-
-	(void)fastrpc_release_current_dsp_process();
+#ifdef VENDOR_EDIT	
+/* xiaojun.lv@PhoneSW.AudioDrv, 2014/10/18, modify patch for bug 515596, enter camera, 
+ * adsp crashed. case id 01758302 */
+	(void)fastrpc_release_current_dsp_process(fdata);
+#else
+    (void)fastrpc_release_current_dsp_process();  
+#endif
 	cleanup_current_dev();
 	if (fdata) {
 		struct fastrpc_mmap *map = 0;
@@ -1320,6 +1345,11 @@ static int fastrpc_device_open(struct inode *inode, struct file *filp)
 
 		spin_lock_init(&fdata->hlock);
 		INIT_HLIST_HEAD(&fdata->hlst);
+#ifdef VENDOR_EDIT	
+/* xiaojun.lv@PhoneSW.AudioDrv, 2014/10/18, add patch for bug 515596, enter camera, 
+ * adsp crashed. case id 01758302 */
+		fdata->tgid = current->tgid;
+#endif
 
 		VERIFY(err, 0 == fastrpc_create_current_dsp_process());
 		if (err)

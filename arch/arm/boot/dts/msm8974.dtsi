@@ -269,7 +269,12 @@
 		qcom,vdd-voltage-level = <1 5 7>;
 
 		qcom,hsusb-otg-phy-type = <2>;
-		qcom,hsusb-otg-phy-init-seq = <0x63 0x81 0xffffffff>;
+		/* #ifndef VENDOR_EDIT */
+		/* Zhilong.Zhang@OnlineRd.Driver, 2013/11/13, Modify for tuning USB PHY eye diagram */	
+		/*qcom,hsusb-otg-phy-init-seq = <0x63 0x81 0xffffffff>;*/
+		/* #else */
+		qcom,hsusb-otg-phy-init-seq = <0x44 0x80 0x3F 0x81 0x4D 0x82 0x13 0x83 0xffffffff>;	
+		/* #endif */
 		qcom,hsusb-otg-mode = <1>;
 		qcom,hsusb-otg-otg-control = <1>;
 		qcom,hsusb-otg-disable-reset;
@@ -767,10 +772,16 @@
 						   "cdc-vdd-a-1p2v",
 						   "cdc-vddcx-1",
 						   "cdc-vddcx-2";
-
+		/*VENDOR_EDIT liuyan add 2013-11-26,chinese and america hpmic switch*/
+		cdc-hpmic_switch-1-supply = <&pm8941_l24>;
+		/*liuyan add end*/
+		
 			qcom,cdc-micbias-ldoh-v = <0x3>;
 			qcom,cdc-micbias-cfilt1-mv = <1800>;
-			qcom,cdc-micbias-cfilt2-mv = <2700>;
+			/* VENDOR_EDIT liuyan 2013-3-15 modify,mic bias*/
+			/*qcom,cdc-micbias-cfilt2-mv = <2700>;*/
+                        qcom,cdc-micbias-cfilt2-mv = <2000>;
+			/*liuyan modify end*/
 			qcom,cdc-micbias-cfilt3-mv = <2700>;
 			qcom,cdc-micbias1-cfilt-sel = <0x0>;
 			qcom,cdc-micbias2-cfilt-sel = <0x1>;
@@ -803,10 +814,21 @@
 			"MIC BIAS1 Internal1", "Handset Mic",
 			"AMIC2", "MIC BIAS2 External",
 			"MIC BIAS2 External", "Headset Mic",
-			"AMIC3", "MIC BIAS2 External",
-			"MIC BIAS2 External", "ANCRight Headset Mic",
-			"AMIC4", "MIC BIAS2 External",
-			"MIC BIAS2 External", "ANCLeft Headset Mic",
+			
+			/*VENDOR_EDIT liuyan 2013-3-15 modify*/
+			/*"AMIC3", "MIC BIAS2 External",*/
+			/*"MIC BIAS2 External", "ANCRight Headset Mic",*/
+			/*"AMIC4", "MIC BIAS2 External",*/
+			/*"MIC BIAS2 External", "ANCLeft Headset Mic",*/
+			
+			"AMIC3", "MIC BIAS1 External",
+			"MIC BIAS1 External", "Main Mic",
+			"AMIC4", "MIC BIAS1 External",
+			"MIC BIAS1 External", "Second Mic",
+			"AMIC5", "MIC BIAS1 External",
+			"MIC BIAS1 External", "ANC Mic",
+			/*liuyan modify end*/
+			
 			"DMIC1", "MIC BIAS1 External",
 			"MIC BIAS1 External", "Digital Mic1",
 			"DMIC2", "MIC BIAS1 External",
@@ -831,6 +853,13 @@
 		qcom,sec-auxpcm-gpio-sync = <&msmgpio 80 0>;
 		qcom,sec-auxpcm-gpio-din  = <&msmgpio 81 0>;
 		qcom,sec-auxpcm-gpio-dout = <&msmgpio 82 0>;
+		/*VENDOR_EDIT liuyan add 2013-3-14,chinese and america hpmic switch*/
+                qcom,hpmic-switch-gpio = <&msmgpio 87 0>;
+                qcom,yda145_ctr-gpio = <&msmgpio 77 0>;
+                qcom,yda145_boots-gpio = <&msmgpio 67 0>;
+                enable_spk-gpio = <&msmgpio 73 0>; /*liuyan add 2013-8-19,speaker*/
+                cdc_spk-supply = <&pm8941_boost>; /*lvxiaojun add 2014-2-10,14001 yda145 supply*/
+               /*liuyan add end*/
 	};
 
 	spmi_bus: qcom,spmi@fc4c0000 {
@@ -875,7 +904,10 @@
 		qcom,scl-gpio = <&msmgpio 3 0>;
 		qcom,sda-gpio = <&msmgpio 2 0>;
 		qcom,master-id = <86>;
-		status = "disabled";
+		/*VENDOR_EDIT wangjc enable*/
+		/*status = "disabled";*/
+		status = "ok";
+		/*end add*/
 	};
 
 	i2c_2: i2c@f9924000 {
@@ -1888,7 +1920,12 @@
 		compatible = "qcom,msm-dai-mi2s";
 		qcom,msm-dai-q6-mi2s-quat {
 			compatible = "qcom,msm-dai-q6-mi2s";
-			qcom,msm-dai-q6-mi2s-dev-id = <3>;
+			//#ifndef VENDOR_EDIT
+			//xiaojun.lv@PhoneDpt.AudioDrv, modify for 14021 smartPA
+			//qcom,msm-dai-q6-mi2s-dev-id = <3>;
+			//#else
+			qcom,msm-dai-q6-mi2s-dev-id = <1>;
+			//#endif
 			qcom,msm-mi2s-rx-lines = <1>;
 			qcom,msm-mi2s-tx-lines = <2>;
 		};
@@ -2031,8 +2068,10 @@
 		rpm-channel-name = "rpm_requests";
 		rpm-channel-type = <15>; /* SMD_APPS_RPM */
 	};
+        /*#ifdef VENDOR_EDIT*/
+        /*liuyan 2014-17 fix big at current in ftm sleep mode*/
 
-        qcom,msm-rng@f9bff000 {
+        /*qcom,msm-rng@f9bff000 {
 		compatible = "qcom,msm-rng";
 		reg = <0xf9bff000 0x200>;
 		qcom,msm-bus,name = "msm-rng-noc";
@@ -2041,7 +2080,20 @@
 		qcom,msm-bus,vectors-KBps =
 				<88 618 0 0>,
 				<88 618 0 800>;
+        };*/
+        /*#else*/
+         qcom,msm-rng@f9bff000 {
+		compatible = "qcom,msm-rng";
+		reg = <0xf9bff000 0x200>;
+		qcom,msm-bus,name = "msm-rng-noc";
+		qcom,msm-bus,num-cases = <2>;
+		qcom,msm-bus,num-paths = <1>;
+		qcom,msm-bus,vectors-KBps =
+				<54 618 0 0>,
+				<54 618 0 800>;
         };
+        /*liuyan fix end*/
+        /*#endif*/
 
 	qseecom: qcom,qseecom@7b00000 {
 		compatible = "qcom,qseecom";
@@ -2068,8 +2120,10 @@
 		compatible = "qcom,msm-watchdog";
 		reg = <0xf9017000 0x1000>;
 		interrupts = <0 3 0>, <0 4 0>;
-		qcom,bark-time = <11000>;
-		qcom,pet-time = <10000>;
+		/*qcom,bark-time = <11000>;*/
+		qcom,bark-time = <25000>;
+		/*qcom,pet-time = <10000>;*/
+		qcom,pet-time = <20000>;
 		qcom,ipi-ping;
 	};
 
@@ -2315,7 +2369,8 @@
         memory_hole: qcom,msm-mem-hole {
                 compatible = "qcom,msm-mem-hole";
                 qcom,memblock-remove = <0x5d00000 0x7d00000
-					0xfa00000 0x500000>; /* Address and Size of Hole */
+										0xfa00000 0x500000 
+										0x05900000 0x100000>; /* Address and Size of Hole */
         };
 
 	uart7: uart@f995d000 { /*BLSP #2, UART #7 */

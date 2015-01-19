@@ -97,6 +97,9 @@
 			cdc-vdd-a-1p2v-supply = <&pma8084_l1>;
 			cdc-vddcx-1-supply = <&pma8084_l1>;
 			cdc-vddcx-2-supply = <&pma8084_l1>;
+                        /*VENDOR_EDIT liuyan add 2013-12-26 for hpmic*/
+                        cdc-hpmic_switch-1-supply = <&pma8084_l24>;
+			/*liuyan add end*/
 		};
 	};
 

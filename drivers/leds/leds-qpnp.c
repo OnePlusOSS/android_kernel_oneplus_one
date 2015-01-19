@@ -26,6 +26,13 @@
 #include <linux/delay.h>
 #include <linux/regulator/consumer.h>
 #include <linux/delay.h>
+/*Added by Jinshui.Liu@Camera 20140827 start for individual flashlight*/
+#ifdef CONFIG_VENDOR_EDIT
+#include <asm/uaccess.h>
+#include <linux/pcb_version.h>
+#include <linux/proc_fs.h>
+#endif
+/*Added by Jinshui.Liu@Camera 20140901 end*/
 
 #define WLED_MOD_EN_REG(base, n)	(base + 0x60 + n*0x10)
 #define WLED_IDAC_DLY_REG(base, n)	(WLED_MOD_EN_REG(base, n) + 0x01)
@@ -499,6 +506,12 @@ static struct pwm_device *kpdbl_master;
 static u32 kpdbl_master_period_us;
 DECLARE_BITMAP(kpdbl_leds_in_use, NUM_KPDBL_LEDS);
 static bool is_kpdbl_master_turn_on;
+/*Added by Jinshui.Liu@Camera 20140624 start for flash led test*/
+#ifdef CONFIG_VENDOR_EDIT
+bool flash_blink_state;
+int led_flash_state;
+#endif
+/*Added by Jinshui.Liu@Camera 20140624 end*/
 
 static int
 qpnp_led_masked_write(struct qpnp_led_data *led, u16 addr, u8 mask, u8 val)
@@ -2397,6 +2410,100 @@ static ssize_t blink_store(struct device *dev,
 	return count;
 }
 
+/*Added by Jinshui.Liu@Camera 20140624 start for flash led test*/
+#ifdef CONFIG_VENDOR_EDIT
+static void led_flash_blink_work(struct work_struct *work)
+{
+    //int brightness;
+    struct delayed_work *dwork = to_delayed_work(work);
+	struct qpnp_led_data *led = container_of(dwork,
+					struct qpnp_led_data, dwork);
+
+    if (flash_blink_state) {
+        if (led->flash_cfg->torch_enable)
+            led->cdev.brightness = 51;
+        else
+            led->cdev.brightness = 500;
+    } else {
+        led->cdev.brightness = 0;
+    }
+
+	__qpnp_led_work(led, 0);
+	
+    flash_blink_state = !flash_blink_state;
+	
+    schedule_delayed_work(dwork, msecs_to_jiffies(1000));
+	return;
+}
+
+static void led_flash_blink_stop(struct qpnp_led_data *led)
+{
+    
+    if (led_flash_state == 2) {
+        flash_blink_state = false;
+        cancel_delayed_work_sync(&led->dwork);
+        led->cdev.brightness = 0;
+        __qpnp_led_work(led, 0);
+    } else if(led_flash_state == 1 || led_flash_state == 3) {
+        led->cdev.brightness = 0;
+        __qpnp_led_work(led, 0);
+    } else {
+        return;
+    }
+    
+    led_flash_state = 0;
+}
+
+static ssize_t led_flash_blink_store(struct device *dev,
+	struct device_attribute *attr,
+	const char *buf, size_t count)
+{
+	ssize_t ret = -EINVAL;
+	struct qpnp_led_data *led;
+	unsigned long state;
+	struct led_classdev *led_cdev = dev_get_drvdata(dev);
+	led = container_of(led_cdev, struct qpnp_led_data, cdev);
+
+	ret = kstrtoul(buf, 10, &state);
+	if (ret)
+		return ret;
+
+    /*stop it first*/
+    led_flash_blink_stop(led);
+
+    if (state == 2) {
+        /*blink*/
+        flash_blink_state = true;
+        INIT_DELAYED_WORK(&led->dwork, led_flash_blink_work);
+    	schedule_delayed_work(&led->dwork, msecs_to_jiffies(500));
+	} else if(state == 1 || state == 3) {
+	    /*lamp*/
+        if (led->flash_cfg->torch_enable)
+            led->cdev.brightness = 53;
+        else
+            led->cdev.brightness = 560;
+        __qpnp_led_work(led, 0);
+	}
+
+    pr_err("%s: set led_flash_state to %ld\n", __func__, state);
+    led_flash_state = state;
+
+	return count;
+}
+
+static ssize_t led_flash_blink_show(struct device *dev,
+				  struct device_attribute *attr, char *buf)
+{
+	ssize_t size = -EINVAL;
+
+	if (led_flash_state >= 0)
+		size = snprintf(buf, PAGE_SIZE, "%d\n", led_flash_state);
+	return size;
+}
+
+static DEVICE_ATTR(flash_blink, 0664, led_flash_blink_show, led_flash_blink_store);
+#endif
+/*Added by Jinshui.Liu@Camera 20140624 end*/
 static DEVICE_ATTR(led_mode, 0664, NULL, led_mode_store);
 static DEVICE_ATTR(strobe, 0664, NULL, led_strobe_type_store);
 static DEVICE_ATTR(pwm_us, 0664, NULL, pwm_us_store);
@@ -2409,6 +2516,11 @@ static DEVICE_ATTR(duty_pcts, 0664, NULL, duty_pcts_store);
 static DEVICE_ATTR(blink, 0664, NULL, blink_store);
 
 static struct attribute *led_attrs[] = {
+    /*Added by Jinshui.Liu@Camera 20140624 start for flash led test*/
+#ifdef CONFIG_VENDOR_EDIT
+    &dev_attr_flash_blink.attr,
+#endif
+/*Added by Jinshui.Liu@Camera 20140624 end*/
 	&dev_attr_led_mode.attr,
 	&dev_attr_strobe.attr,
 	NULL

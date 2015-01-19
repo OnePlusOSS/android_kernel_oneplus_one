@@ -600,10 +600,11 @@ out:
 /*
  * Print the names of enabled clocks and their parents if debug_suspend is set
  */
+bool dump_clk_enabled;
 void clock_debug_print_enabled(void)
 {
 	if (likely(!debug_suspend))
 		return;
-
-	clock_debug_print_enabled_clocks(NULL);
+	if(dump_clk_enabled)
+		clock_debug_print_enabled_clocks(NULL);
 }

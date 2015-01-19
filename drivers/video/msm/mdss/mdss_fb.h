@@ -222,6 +222,9 @@ struct msm_fb_data_type {
 
 	struct msm_fb_splash_info splash_info;
 
+	bool splash_logo_enabled;
+
+
 	wait_queue_head_t ioctl_q;
 	atomic_t ioctl_ref_cnt;
 

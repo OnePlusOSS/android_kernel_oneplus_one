@@ -154,4 +154,9 @@ source "drivers/bif/Kconfig"
 
 source "drivers/sensors/Kconfig"
 
+#OPPO 2014-05-23 Xinhua.Song added begin for camera motor
+#ifdef VENDOR_EDIT
+source "drivers/camera-motor/Kconfig"
+#endif VENDOR_EDIT
+#OPPO 2014-05-23 Xinhua.Song added end for camera motor
 endmenu

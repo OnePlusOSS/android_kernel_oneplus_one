@@ -72,7 +72,9 @@
 			qcom,s1-timer = <0>;
 			qcom,s2-timer = <2000>;
 			qcom,s2-type = <1>;
-			linux,code = <114>;
+/*OPPO liushu 2013-11-06 modify begin for function of power key*/
+			linux,code = <0>;
+/*OPPO liushu 2013-11-06 modify end for function of power key*/
 			qcom,use-bark;
 		};
 
@@ -136,7 +138,8 @@
 		qcom,calculate-soc-ms = <20000>;
 		qcom,chg-term-ua = <100000>;
 		qcom,batt-type = <0>;
-		qcom,low-voltage-threshold = <3420000>;
+		/*vendor_edit wangjc change*/
+		qcom,low-voltage-threshold = <3520000>;
 		qcom,tm-temp-margin = <5000>;
 		qcom,low-ocv-correction-limit-uv = <100>;
 		qcom,high-ocv-correction-limit-uv = <250>;
@@ -200,19 +203,20 @@
 		#size-cells = <1>;
 		status = "disabled";
 
-		qcom,vddmax-mv = <4200>;
-		qcom,vddsafe-mv = <4230>;
-		qcom,vinmin-mv = <4300>;
-		qcom,ibatmax-ma = <1500>;
-		qcom,ibatterm-ma = <100>;
-		qcom,ibatsafe-ma = <1500>;
-		qcom,thermal-mitigation = <1500 700 600 325>;
+		/*vendor_edit wangjc change*/
+		qcom,vddmax-mv = <4352>;
+		qcom,vddsafe-mv = <4350>;
+		qcom,vinmin-mv = <4400>;
+		qcom,ibatmax-ma = <2000>;
+		qcom,ibatterm-ma = <150>;
+		qcom,ibatsafe-ma = <2000>;
+		qcom,thermal-mitigation = <2000 900 900 200>;
 		qcom,cool-bat-decidegc = <100>;
-		qcom,cool-bat-mv = <4100>;
-		qcom,ibatmax-warm-ma = <350>;
+		qcom,cool-bat-mv = <4200>;
+		qcom,ibatmax-warm-ma = <900>;
 		qcom,warm-bat-decidegc = <450>;
 		qcom,warm-bat-mv = <4100>;
-		qcom,ibatmax-cool-ma = <350>;
+		qcom,ibatmax-cool-ma = <900>;
 		qcom,vbatdet-delta-mv = <100>;
 		qcom,resume-soc = <99>;
 		qcom,tchg-mins = <150>;
@@ -303,7 +307,7 @@
 		};
 
 		pm8941_chg_boost: qcom,boost@1500 {
-			status = "disabled";
+			status = "okay";
 			reg = <0x1500 0x100>;
 			interrupts =	<0x0 0x15 0x0>,
 					<0x0 0x15 0x1>;
@@ -564,8 +568,10 @@
 		#address-cells = <1>;
 		#size-cells = <1>;
 		qcom,qpnp-rtc-write = <0>;
-		qcom,qpnp-rtc-alarm-pwrup = <0>;
-
+		/*OPPO yuyi 2013-09-27  modify begin for alarm_powerup*/
+			/*qcom,qpnp-rtc-alarm-pwrup = <0>;*/
+			qcom,qpnp-rtc-alarm-pwrup = <1>;
+		/*OPPO yuyi 2013-09-27  modify end for alarm_powerup*/
 		qcom,pm8941_rtc_rw@6000 {
 			reg = <0x6000 0x100>;
 		};
@@ -839,6 +845,10 @@
 			label = "internal_rsense";
 			reg = <0>;
 			qcom,decimation = <0>;
+			qcom,pre-div-channel-scaling = <1>;
+			qcom,calibration-type = "absolute";
+			qcom,scale-function = <0>;
+			qcom,hw-settle-time = <0>;
 			qcom,fast-avg-setup = <0>;
 		};
 	};

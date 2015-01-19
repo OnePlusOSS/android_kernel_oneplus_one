@@ -1603,6 +1603,39 @@ static int smd_packet_read(smd_channel_t *ch, void *data, int len, int user_buf)
 	if (r > 0)
 		if (!read_intr_blocked(ch))
 			ch->notify_other_cpu(ch);
+		
+//#ifdef VENDOR_EDIT 
+//DuYuanhua@Modem, 2014/10/11, added for modem wake up AP issue
+//pr_info("info: smd_packet_read: %s",ch->name);
+		
+	if(msm_smd_debug_mask & MSM_SMD_DEBUG){
+		// if(len<=20)
+		//	  print_hex_dump(KERN_INFO, "smdcntl0 smd_packet_read qmi: ", DUMP_PREFIX_NONE, 16, 1, (unsigned char *)data, len, 1);
+		// else
+		//	  print_hex_dump(KERN_INFO, "smdcntl0 smd_packet_read qmi: ", DUMP_PREFIX_NONE, 16, 1, (unsigned char *)data, 20, 1);
+		if(!strcmp(ch->name, "DATA5_CNTL")){
+			if(len <= 20) 
+				print_hex_dump(KERN_INFO, "D5:smdcntl0: smd_packet_read qmi: ", DUMP_PREFIX_NONE, 16, 1, (unsigned char *)data, len, 1); 
+			else
+				print_hex_dump(KERN_INFO, "D5:smdcntl0: smd_packet_read qmi: ", DUMP_PREFIX_NONE, 16, 1, (unsigned char *)data, 20, 1);
+		}
+		
+		if(!strcmp(ch->name, "DATA40_CNTL")){
+			pr_info("info: smd_cntl1");
+			if(len<=20)
+				print_hex_dump(KERN_INFO, "D40: smd_packet_read qmi: ", DUMP_PREFIX_NONE, 16, 1, (unsigned char *)data, len, 1);
+			else
+				print_hex_dump(KERN_INFO, "D40: smd_packet_read qmi: ", DUMP_PREFIX_NONE, 16, 1, (unsigned char *)data, 20, 1);
+		}
+		
+		if(!strcmp(ch->name, "IPCRTR")){
+			if(len <= 40)
+				print_hex_dump(KERN_INFO, "IPC: smd_packet_read qmi: ", DUMP_PREFIX_NONE, 16, 1, (unsigned char *)data, len, 1);
+			else
+				print_hex_dump(KERN_INFO, "IPC: smd_packet_read qmi: ", DUMP_PREFIX_NONE, 16, 1, (unsigned char *)data, 40, 1);
+		}
+	}
+//#endif
 
 	spin_lock_irqsave(&smd_lock, flags);
 	ch->current_packet -= r;

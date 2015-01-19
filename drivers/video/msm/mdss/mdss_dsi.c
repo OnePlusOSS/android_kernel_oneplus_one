@@ -27,6 +27,19 @@
 #include "mdss_dsi.h"
 #include "mdss_debug.h"
 
+#ifdef VENDOR_EDIT
+/* Xiaori.Yuan@Mobile Phone Software Dept.Driver, 2014/04/11  Add for AT current for find7s */
+#include <linux/boot_mode.h>
+#endif /*VENDOR_EDIT*/
+
+/* OPPO 2014-02-10 yxq Added begin for Find7S */
+#include <linux/pcb_version.h>
+/* OPPO 2014-02-10 yxq Added end */
+/* OPPO 2013-11-20 yxq Add begin for compatible cmd mode and video mode */
+#define COMMAND_MODE_ENABLE
+/* OPPO 2013-11-20 yxq Add end */
+//static unsigned char *mdss_dsi_base;
+
 static int mdss_dsi_regulator_init(struct platform_device *pdev)
 {
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
@@ -94,6 +107,8 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata, int enable)
 					__func__, ret);
 			goto error;
 		}
+#ifndef VENDOR_EDIT
+/* Xiaori.Yuan@Mobile Phone Software Dept.Driver, 2014/04/02  Modify for probabilistic blurred screen for find7s */
 		ret = msm_dss_enable_vreg(
 			ctrl_pdata->power_data.vreg_config,
 			ctrl_pdata->power_data.num_vreg, 0);
@@ -101,6 +116,22 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata, int enable)
 			pr_err("%s: Failed to disable vregs.rc=%d\n",
 				__func__, ret);
 		}
+#else /*VENDOR_EDIT*/
+	if((get_pcb_version() >= HW_VERSION__20&&
+	     get_pcb_version() <HW_VERSION__30) && 
+		get_boot_mode()!= MSM_BOOT_MODE__FACTORY){
+		ret = 0;
+	}
+	else{
+		ret = msm_dss_enable_vreg(
+			ctrl_pdata->power_data.vreg_config,
+			ctrl_pdata->power_data.num_vreg, 0);
+		if (ret) {
+			pr_err("%s: Failed to disable vregs.rc=%d\n",
+				__func__, ret);
+		}
+	}
+#endif /*VENDOR_EDIT*/
 	}
 error:
 	return ret;
@@ -137,11 +168,28 @@ static int mdss_dsi_get_dt_vreg_data(struct device *dev,
 	of_node = dev->of_node;
 
 	mp->num_vreg = 0;
+#ifndef CONFIG_VENDOR_EDIT
+/* Xinqin.Yang@PhoneSW.Driver, 2014/02/10  Modify for Find7S */
 	for_each_child_of_node(of_node, supply_node) {
 		if (!strncmp(supply_node->name, "qcom,platform-supply-entry",
 						26))
 			++mp->num_vreg;
 	}
+#else /*CONFIG_VENDOR_EDIT*/
+	if ((get_pcb_version() < HW_VERSION__20)||(get_pcb_version() >= HW_VERSION__30)) { /* For Find7 liuyan add 30 for N3*/
+        for_each_child_of_node(of_node, supply_node) {
+            if (!strncmp(supply_node->name, "qcom,platform-supply-entry",
+                            26))
+                ++mp->num_vreg;
+        }
+	} else { /* For Find7S */
+        for_each_child_of_node(of_node, supply_node) {
+            if (!strncmp(supply_node->name, "qcom,platform-supply-entry",
+                            26) && strncmp(supply_node->name, "qcom,platform-supply-entry1", 27))
+                ++mp->num_vreg;
+        }
+	}
+#endif /*CONFIG_VENDOR_EDIT*/
 	if (mp->num_vreg == 0) {
 		pr_debug("%s: no vreg\n", __func__);
 		goto novreg;
@@ -161,6 +209,14 @@ static int mdss_dsi_get_dt_vreg_data(struct device *dev,
 		if (!strncmp(supply_node->name, "qcom,platform-supply-entry",
 						26)) {
 			const char *st = NULL;
+#ifdef CONFIG_VENDOR_EDIT
+            /* Xinqin.Yang@PhoneSW.Driver, 2014/02/10  Add for Find7S */
+            if ((get_pcb_version() >= HW_VERSION__20)&&(get_pcb_version() < HW_VERSION__30)) {/*liuyan add 30 for N3*/
+                if (!strncmp(supply_node->name, "qcom,platform-supply-entry1", 27)){
+                    continue;
+                }
+            }
+#endif /*CONFIG_VENDOR_EDIT*/
 			/* vreg-name */
 			rc = of_property_read_string(supply_node,
 				"qcom,supply-name", &st);
@@ -768,7 +824,10 @@ static int mdss_dsi_unblank(struct mdss_panel_data *pdata)
 
 	if (pdata->panel_info.type == MIPI_CMD_PANEL) {
 		if (mipi->vsync_enable && mipi->hw_vsync_mode
-			&& gpio_is_valid(ctrl_pdata->disp_te_gpio)) {
+			&& gpio_is_valid(ctrl_pdata->disp_te_gpio)) 
+
+		{
+		
 				mdss_dsi_set_tear_on(ctrl_pdata);
 		}
 	}
@@ -867,12 +926,24 @@ int mdss_dsi_cont_splash_on(struct mdss_panel_data *pdata)
 	pr_debug("%s+: ctrl=%p ndx=%d\n", __func__,
 				ctrl_pdata, ctrl_pdata->ndx);
 
+#ifndef CONFIG_VENDOR_EDIT
+/* Xinqin.Yang@PhoneSW.Driver, 2013/12/26  Delete for panel had initialized */
 	WARN((ctrl_pdata->ctrl_state & CTRL_STATE_PANEL_INIT),
 		"Incorrect Ctrl state=0x%x\n", ctrl_pdata->ctrl_state);
+#endif /*CONFIG_VENDOR_EDIT*/
 
 	mdss_dsi_sw_reset(pdata);
 	mdss_dsi_host_init(pdata);
 	mdss_dsi_op_mode_config(mipi->mode, pdata);
+
+	if (ctrl_pdata->on_cmds.link_state == DSI_LP_MODE) {
+		ret = mdss_dsi_unblank(pdata);
+		if (ret) {
+			pr_err("%s: unblank failed\n", __func__);
+			return ret;
+		}
+	}
+
 	pr_debug("%s-:End\n", __func__);
 	return ret;
 }
@@ -1047,15 +1118,27 @@ static int mdss_dsi_event_handler(struct mdss_panel_data *pdata,
 		rc = mdss_dsi_off(pdata);
 		break;
 	case MDSS_EVENT_CONT_SPLASH_FINISH:
-		if (ctrl_pdata->off_cmds.link_state == DSI_LP_MODE)
-			rc = mdss_dsi_blank(pdata);
+/* OPPO 2013-10-18 yxq added begin for continous splash */
+#ifdef VENDOR_EDIT
+		pr_err("%s: MDSS_EVENT_CONT_SPLASH_FINISH\n", __func__);
+		mdss_dsi_on(pdata); 
+#endif
+/* OPPO 2013-10-18 yxq added end */
 		ctrl_pdata->ctrl_state &= ~CTRL_STATE_MDP_ACTIVE;
-		rc = mdss_dsi_cont_splash_on(pdata);
+		if (ctrl_pdata->on_cmds.link_state == DSI_LP_MODE) {
+			rc = mdss_dsi_cont_splash_on(pdata);
+		} else {
+			pr_debug("%s:event=%d, Dsi On not called: ctrl_state: %d\n",
+				 __func__, event,
+				 ctrl_pdata->on_cmds.link_state);
+			rc = -EINVAL;
+		}
 		break;
 	case MDSS_EVENT_PANEL_CLK_CTRL:
 		mdss_dsi_clk_req(ctrl_pdata, (int)arg);
 		break;
 	case MDSS_EVENT_DSI_CMDLIST_KOFF:
+		ctrl_pdata->recovery = (struct mdss_panel_recovery *)arg;
 		mdss_dsi_cmdlist_commit(ctrl_pdata, 1);
 		break;
 	case MDSS_EVENT_PANEL_UPDATE_FPS:
@@ -1070,6 +1153,10 @@ static int mdss_dsi_event_handler(struct mdss_panel_data *pdata,
 			/* Panel is Enabled in Bootloader */
 			rc = mdss_dsi_blank(pdata);
 		}
+/* OPPO 2013-10-18 yxq added begin for continous splash */
+#ifdef VENDOR_EDIT
+		 mdss_dsi_off(pdata); 
+#endif
 		break;
 	case MDSS_EVENT_ENABLE_PARTIAL_UPDATE:
 		rc = mdss_dsi_ctl_partial_update(pdata);
@@ -1541,6 +1628,7 @@ int dsi_panel_device_register(struct device_node *pan_node,
 		if (rc) {
 			pr_err("request TE gpio failed, rc=%d\n",
 			       rc);
+			gpio_free(ctrl_pdata->disp_te_gpio);
 			return -ENODEV;
 		}
 		rc = gpio_tlmm_config(GPIO_CFG(
@@ -1564,10 +1652,46 @@ int dsi_panel_device_register(struct device_node *pan_node,
 			gpio_free(ctrl_pdata->disp_te_gpio);
 			return -ENODEV;
 		}
-		pr_debug("%s: te_gpio=%d\n", __func__,
+		pr_err("%s: te_gpio=%d\n", __func__,
 					ctrl_pdata->disp_te_gpio);
 	}
 
+#ifdef VENDOR_EDIT
+//##############################################################
+rc = gpio_request(28, "disp_esd");
+		if (rc) {
+			pr_err("yanghai request ESD gpio failed, rc=%d\n",
+			       rc);
+			gpio_free(28);
+			return -ENODEV;
+		}
+		rc = gpio_tlmm_config(GPIO_CFG(
+				28, 0,
+				GPIO_CFG_INPUT,
+				GPIO_CFG_PULL_DOWN,
+				GPIO_CFG_2MA),
+				GPIO_CFG_ENABLE);
+
+		if (rc) {
+			pr_err("%s: unable to ESD config tlmm = 28\n",
+				__func__);
+			gpio_free(28);
+			return -ENODEV;
+		}
+
+		rc = gpio_direction_input(28);
+		if (rc) {
+			pr_err("set_direction for ESD GPIO failed, rc=%d\n",
+			       rc);
+			gpio_free(28);
+			return -ENODEV;
+		}
+			printk(KERN_ERR"TE check test11\n");
+#endif
+
+
+
+//###########################################################
 	ctrl_pdata->rst_gpio = of_get_named_gpio(ctrl_pdev->dev.of_node,
 			 "qcom,platform-reset-gpio", 0);
 	if (!gpio_is_valid(ctrl_pdata->rst_gpio))
@@ -1582,10 +1706,16 @@ int dsi_panel_device_register(struct device_node *pan_node,
 		if (!gpio_is_valid(ctrl_pdata->mode_gpio))
 			pr_info("%s:%d, mode gpio not specified\n",
 							__func__, __LINE__);
-	} else {
-		ctrl_pdata->mode_gpio = -EINVAL;
-	}
-
+/* OPPO 2014-02-21 yxq add begin for Find7S */
+		}else{
+			ctrl_pdata->disp_te_gpio = of_get_named_gpio(ctrl_pdev->dev.of_node,
+						"qcom,platform-te-gpio", 0);
+		ctrl_pdata->rst_gpio = of_get_named_gpio(ctrl_pdev->dev.of_node,
+			 "qcom,platform-reset-gpio", 0);
+		ctrl_pdata->disp_en_gpio = of_get_named_gpio(ctrl_pdev->dev.of_node,
+		"qcom,platform-enable-gpio", 0);
+		}
+/* OPPO 2014-02-11 yxq add end */
 	if (mdss_dsi_clk_init(ctrl_pdev, ctrl_pdata)) {
 		pr_err("%s: unable to initialize Dsi ctrl clks\n", __func__);
 		return -EPERM;
@@ -1703,3 +1833,4 @@ module_exit(mdss_dsi_driver_cleanup);
 MODULE_LICENSE("GPL v2");
 MODULE_DESCRIPTION("DSI controller driver");
 MODULE_AUTHOR("Chandan Uddaraju <chandanu@codeaurora.org>");
+

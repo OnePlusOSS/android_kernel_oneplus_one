@@ -30,6 +30,13 @@
 #include <sound/lsm_params.h>
 #include "msm-pcm-routing-v2.h"
 
+/* OPPO 2014-07-25 John.Xu@Audio.Driver Add begin for fix sometime phone will go to sleep when get detect event */
+#ifdef VENDOR_EDIT
+#include <linux/wakelock.h>
+#endif
+/* OPPO 2014-07-25 John.Xu@Audio.Driver Add end */
+
+
 struct lsm_priv {
 	struct snd_pcm_substream *substream;
 	struct lsm_client *lsm_client;
@@ -39,6 +46,11 @@ struct lsm_priv {
 	wait_queue_head_t event_wait;
 	unsigned long event_avail;
 	atomic_t event_wait_stop;
+/* OPPO 2014-07-25 John.Xu@Audio.Driver Add begin for fix sometime phone will go to sleep when get detect event */
+#ifdef VENDOR_EDIT
+    struct wake_lock timeout_wake_lock;
+#endif
+/* OPPO 2014-07-25 John.Xu@Audio.Driver Add end */
 };
 
 static void lsm_event_handler(uint32_t opcode, uint32_t token,
@@ -183,6 +195,14 @@ static int msm_lsm_ioctl(struct snd_pcm_substream *substream,
 						      size)) {
 					rc = -EFAULT;
 				} else {
+/* OPPO 2014-07-25 John.Xu@Audio.Driver Add begin for fix sometime phone will go to sleep when get detect event */
+#ifdef VENDOR_EDIT
+				    if(event_status->status == 2) {
+				        pr_err("%s: Detect event 3second timeout wake lock \n",__func__);
+				        wake_lock_timeout(&prtd->timeout_wake_lock, msecs_to_jiffies(3000));
+                    }
+#endif
+/* OPPO 2014-07-25 John.Xu@Audio.Driver Add end */
 					rc = copy_to_user(arg, event_status,
 							  size);
 					if (rc)
@@ -270,6 +290,13 @@ static int msm_lsm_open(struct snd_pcm_substream *substream)
 		return ret;
 	}
 
+/* OPPO 2014-07-25 John.Xu@Audio.Driver Add begin for fix sometime phone will go to sleep when get detect event */
+#ifdef VENDOR_EDIT
+	wake_lock_init(&prtd->timeout_wake_lock, WAKE_LOCK_SUSPEND,
+            "SVA timeout wake lock");
+#endif
+/* OPPO 2014-07-25 John.Xu@Audio.Driver Add end */
+    
 	pr_debug("%s: Session ID %d\n", __func__, prtd->lsm_client->session);
 	prtd->lsm_client->started = false;
 	spin_lock_init(&prtd->event_lock);
@@ -284,36 +311,47 @@ static int msm_lsm_close(struct snd_pcm_substream *substream)
 	unsigned long flags;
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct lsm_priv *prtd = runtime->private_data;
-	int ret = 0;
+    int ret;
 
-	pr_debug("%s\n", __func__);
-	if (prtd->lsm_client->started) {
-		ret = q6lsm_stop(prtd->lsm_client, true);
-		if (ret)
-			pr_err("%s: session stop failed, err = %d\n",
-				__func__, ret);
-		else
-			pr_debug("%s: LSM client session stopped %d\n",
-				 __func__, ret);
-
-		/*
-		 * Go Ahead and try de-register sound model,
-		 * even if stop failed
-		 */
-		prtd->lsm_client->started = false;
-
-		ret = q6lsm_deregister_sound_model(prtd->lsm_client);
-		if (ret)
-			pr_err("%s: dereg_snd_model failed, err = %d\n",
-				__func__, ret);
-		else
-			pr_debug("%s: dereg_snd_model succesful\n",
-				 __func__);
-	}
+    pr_debug("%s\n", __func__);
+/* OPPO 2014-08-19 John.Xu@Audio.Driver Add begin for QCOM patch for SVA delay to de/register after native service being killed */
+#ifdef VENDOR_EDIT
+        if (prtd->lsm_client->started) {
+            ret = q6lsm_stop(prtd->lsm_client, true);
+            if (ret)
+                pr_err("%s: session stop failed, err = %d\n",
+                    __func__, ret);
+            else
+                pr_debug("%s: LSM client session stopped %d\n",
+                     __func__, ret);
+    
+            /*
+             * Go Ahead and try de-register sound model,
+             * even if stop failed
+             */
+            prtd->lsm_client->started = false;
+    
+            ret = q6lsm_deregister_sound_model(prtd->lsm_client);
+            if (ret)
+                pr_err("%s: dereg_snd_model failed, err = %d\n",
+                    __func__, ret);
+            else
+                pr_debug("%s: dereg_snd_model succesful\n",
+                     __func__);
+        }
+#endif
+/* OPPO 2014-08-19 John.Xu@Audio.Driver Add end */
 
 	q6lsm_close(prtd->lsm_client);
 	q6lsm_client_free(prtd->lsm_client);
-
+/* OPPO 2014-07-25 John.Xu@Audio.Driver Add begin for fix sometime phone will go to sleep when get detect event */
+#ifdef VENDOR_EDIT
+        if(prtd != NULL && &prtd->timeout_wake_lock != NULL) {
+            wake_lock_destroy(&prtd->timeout_wake_lock);
+            pr_debug("%s destroy timeout_wake_lock \n", __func__);
+        }
+#endif
+/* OPPO 2014-07-25 John.Xu@Audio.Driver Add end */
 	spin_lock_irqsave(&prtd->event_lock, flags);
 	kfree(prtd->event_status);
 	prtd->event_status = NULL;

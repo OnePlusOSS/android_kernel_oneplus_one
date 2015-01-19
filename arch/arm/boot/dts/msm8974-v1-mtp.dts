@@ -23,6 +23,8 @@
 		      <186 8 0>;
 };
 
-&pm8941_chg {
-	qcom,charging-disabled;
-};
+/*wangjc add to enable charge.*/
+/*&pm8941_chg {
+	qcom,chg-charging-disabled;
+};*/
+/*wangjc add end*/

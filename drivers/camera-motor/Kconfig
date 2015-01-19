@@ -1,0 +1,5 @@
+config CAMERA_MOTOR
+	tristate "CAMERA MOTOR Controler"
+	default n
+	help
+	  Say Y here to enable camera motor. 

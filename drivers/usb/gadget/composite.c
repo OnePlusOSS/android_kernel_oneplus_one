@@ -1599,8 +1599,10 @@ composite_suspend(struct usb_gadget *gadget)
 		composite->suspend(cdev);
 
 	cdev->suspended = 1;
-
-	usb_gadget_vbus_draw(gadget, 2);
+#ifdef VENDOR_EDIT
+	//Fix PC USB BUS IDLE cause no charging current issue
+	//usb_gadget_vbus_draw(gadget, 2);
+#endif
 }
 
 static void

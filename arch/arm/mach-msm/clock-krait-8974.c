@@ -579,6 +579,8 @@ static void krait_update_uv(int *uv, int num, int boost_uv)
 			uv[i] = max(1150000, uv[i]);
 	};
 
+	//boost krait voltage by 50 mV for testing 
+	enable_boost = 1; //qcom patch, CASE ID: 01694672, Zhilong.Zhang@OnlineRd.Driver, 2014/09/19, Modify for solve the problem of Kernel NULL pointer
 	if (enable_boost) {
 		for (i = 0; i < num; i++)
 			uv[i] += boost_uv;
@@ -705,7 +707,8 @@ static int clock_krait_8974_driver_probe(struct platform_device *pdev)
 		}
 	}
 
-	krait_update_uv(uv, rows, pvs ? 25000 : 0);
+	//krait_update_uv(uv, rows, pvs ? 25000 : 0);
+	krait_update_uv(uv, rows, pvs ? 50000 : 0);//qcom patch, CASE ID: 01694672, Zhilong.Zhang@OnlineRd.Driver, 2014/09/19, Modify for solve the problem of Kernel NULL pointer
 
 	if (clk_init_vdd_class(dev, &krait0_clk.c, rows, freq, uv, ua))
 		return -ENOMEM;

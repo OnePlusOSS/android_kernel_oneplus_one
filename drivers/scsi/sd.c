@@ -1887,6 +1887,11 @@ static int sd_try_rc16_first(struct scsi_device *sdp)
 {
 	if (sdp->host->max_cmd_len < 16)
 		return 0;
+#ifdef VENDOR_EDIT 
+//Zhilong.Zhang@OnlineRd.Driver, 2013/11/12, Add for OTG device patch (From OPPO N1)
+	if (sdp->try_rc_10_first)
+		return 0;
+#endif /* VENDOR_EDIT */
 	if (sdp->scsi_level > SCSI_SPC_2)
 		return 1;
 	if (scsi_device_protection(sdp))

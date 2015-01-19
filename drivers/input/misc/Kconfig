@@ -724,3 +724,17 @@ config SENSORS_CAPELLA_CM36283
 	  module will be called CM36283.
 
 endif
+	  
+#OPPO ranfei 2014-06-20 add for fpc1021
+config BTP_FPC1021
+	default n
+	tristate "FPC_BTP fingerprint sensor support"
+	depends on SPI_MASTER
+#OPPO ranfei add end 
+
+#OPPO ranfei 2014-06-27 add for mxm1120
+config HALL_MXM1120
+	default n
+	tristate "Digital hall sensor support"
+	depends on I2C
+#OPPO ranfei add end

@@ -12,8 +12,106 @@
  */
 
 &pm8941_lsid1 {
+/*OPPO yuyi 2013-09-27 modify begin for RGB-leds*/
+/*#ifdef VENDOR_EDIT_CONFIG*/
 	qcom,leds@d000 {
 		status = "okay";
+		qcom,rgb_0 {
+			label = "rgb";
+			linux,name = "rgb_red";
+			qcom,mode = "pwm";
+			qcom,pwm-channel = <6>;
+			qcom,duty-ms = <200>;
+			qcom,start-idx = <1>;
+			qcom,idx-len = <10>;
+			qcom,duty-pcts = [00 00 00 00 00 00 00 00 00 00 00 
+							01 03 05 08 0B 10 14 19 1E 24 2A
+							30 38 40 49 52 5B 64 64 
+							64 64 64 5B 52 49 40 38 30  
+							2A 24 1E 19 14 10 0B 08 05 03 01
+							00 00 00 00 00 00 00 00 00 00 00];
+			qcom,max-current = <6>;
+			qcom,pause-lo = <0>;
+			qcom,pause-hi = <0>;
+			qcom,ramp-step-ms = <50>;
+			qcom,default-state = "off";
+			qcom,id = <3>;
+			qcom,pwm-us = <1000>;
+			qcom,use-blink;
+		};
+
+		qcom,rgb_1 {
+			label = "rgb";
+			linux,name = "rgb_green";
+			qcom,mode = "pwm";
+			qcom,pwm-channel = <5>;
+			qcom,duty-ms = <200>;
+			qcom,start-idx = <1>;
+			qcom,idx-len = <10>;
+			qcom,duty-pcts = [00 00 00 00 00 00 00 00 00 00 00 
+							01 03 05 08 0B 10 14 19 1E 24 2A
+							30 38 40 49 52 5B 64 64 
+							64 64 64 5B 52 49 40 38 30  
+							2A 24 1E 19 14 10 0B 08 05 03 01
+							00 00 00 00 00 00 00 00 00 00 00];
+			qcom,max-current = <6>;
+			qcom,pause-lo = <0>;
+			qcom,pause-hi = <0>;
+			qcom,ramp-step-ms = <50>;
+			qcom,default-state = "off";
+			qcom,id = <4>;
+			qcom,pwm-us = <1000>;
+			qcom,use-blink;
+		};
+
+		qcom,rgb_2 {
+			label = "rgb";
+			linux,name = "rgb_blue";
+			qcom,mode = "pwm";
+			qcom,pwm-channel = <4>;
+			qcom,duty-ms = <200>;
+			qcom,start-idx = <1>;
+			qcom,idx-len = <10>;
+			qcom,duty-pcts = [00 00 00 00 00 00 00 00 00 00 00 
+							01 03 05 08 0B 10 14 19 1E 24 2A
+							30 38 40 49 52 5B 64 64 
+							64 64 64 5B 52 49 40 38 30  
+							2A 24 1E 19 14 10 0B 08 05 03 01
+							00 00 00 00 00 00 00 00 00 00 00];
+			qcom,max-current = <6>;
+			qcom,pause-lo = <0>;
+			qcom,pause-hi = <0>;
+			qcom,ramp-step-ms = <50>;
+			qcom,default-state = "off";
+			qcom,id = <5>;
+			qcom,pwm-us = <1000>;
+			qcom,use-blink;
+		};
+	};
+/*#endif*/	
+/*OPPO yuyi 2013-09-27 modify end for RGB-leds*/
+	qcom,leds@d800 {
+		status = "disabled";
+		qcom,wled_0 {
+			label = "wled";
+			linux,name = "wled:backlight";
+			linux,default-trigger = "bkl-trigger";
+			qcom,cs-out-en;
+			qcom,op-fdbck = <1>;
+			qcom,default-state = "on";
+			qcom,max-current = <25>;
+			qcom,ctrl-delay-us = <0>;
+			qcom,boost-curr-lim = <5>;
+			qcom,cp-sel = <0>;
+			qcom,switch-freq = <11>;
+			qcom,ovp-val = <2>;
+			qcom,num-strings = <3>;
+			qcom,id = <0>;
+		};
+	};
+
+	qcom,leds@d000 {
+		status = "disabled";
 		qcom,rgb_0 {
 			label = "rgb";
 			linux,name = "led:rgb_red";
@@ -123,18 +221,22 @@
 	qcom,leds@d700 {
 		status = "disabled";
 	};
-
+/*VENDOR_EDIT*/
+/*OPPO yuyi 2013-09-27 modify begin for button-backlight*/		
 	qcom,leds@e200 {
 		status = "okay";
 
 		qcom,kpdbl1 {
 			label = "kpdbl";
-			linux,name = "kpdbl-pwm-1";
+			linux,name = "button-backlight";
 			qcom,mode = "pwm";
 			qcom,pwm-channel = <8>;
 			qcom,pwm-us = <1000>;
 			qcom,id = <7>;
-			qcom,max-current = <20>;
+			/*OPPO yuyi 2013-11-26 modify current for button-backlight*/
+			/*qcom,max-current = <20>;*/
+			qcom,max-current = <15>;
+			/*OPPO yuyi 2013-11-26 modify end for button-backlight*/
 			qcom,row-id = <0>;
 			qcom,row-src-en;
 			qcom,always-on;
@@ -145,7 +247,8 @@
 			qcom,use-blink;
 			qcom,in-order-command-processing;
 		};
-
+/*OPPO yuyi 2013-09-27 modify end for button-backlight*/
+/*
 		qcom,kpdbl2 {
 			label = "kpdbl";
 			linux,name = "kpdbl-pwm-2";
@@ -202,5 +305,6 @@
                         qcom,in-order-command-processing;
 
 		};
+		*/
 	};
 };
