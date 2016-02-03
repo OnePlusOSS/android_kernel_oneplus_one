@@ -172,6 +172,9 @@ static inline unsigned long cpufreq_scale(unsigned long old, u_int div, u_int mu
 #define CPUFREQ_GOV_START  1
 #define CPUFREQ_GOV_STOP   2
 #define CPUFREQ_GOV_LIMITS 3
+#ifdef VENDOR_EDIT
+#define CPUFREQ_GOV_WBH_CAL   4
+#endif
 
 struct cpufreq_governor {
 	char	name[CPUFREQ_NAME_LEN];
@@ -197,6 +200,17 @@ extern int cpufreq_driver_target(struct cpufreq_policy *policy,
 extern int __cpufreq_driver_target(struct cpufreq_policy *policy,
 				   unsigned int target_freq,
 				   unsigned int relation);
+
+#ifdef VENDOR_EDIT
+extern int __cpufreq_workload_sum(unsigned int cpu, ktime_t *base, u64 *sum);
+extern u64 __cpufreq_boost_hint_add(unsigned int cpu, unsigned int freq);
+extern void __cpufreq_boost_hint_sub(unsigned int cpu,
+					unsigned int freq,
+					u64 tag);
+extern unsigned int __cpufreq_boost_hint_get(unsigned int cpu);
+extern void __cpufreq_boost_hint_rem(unsigned int cpu);
+extern unsigned int __cpufreq_boost_frequency_get(unsigned int cpu);
+#endif
 
 
 extern int __cpufreq_driver_getavg(struct cpufreq_policy *policy,
@@ -243,6 +257,14 @@ struct cpufreq_driver {
 	int	(*exit)		(struct cpufreq_policy *policy);
 	int	(*suspend)	(struct cpufreq_policy *policy);
 	int	(*resume)	(struct cpufreq_policy *policy);
+#ifdef VENDOR_EDIT
+	int (*workload_sum) (unsigned int cpu, ktime_t *base, u64 *sum);
+	u64 (*boost_hint_add) (unsigned int cpu, unsigned int freq);
+	void (*boost_hint_sub) (unsigned int cpu, unsigned int freq, u64 tag);
+	unsigned int (*boost_frequency_get) (unsigned int cpu);
+	unsigned int (*boost_hint_get) (unsigned int cpu);
+	void (*boost_hint_rem) (unsigned int cpu);
+#endif
 	struct freq_attr	**attr;
 };
 
@@ -319,7 +341,9 @@ __ATTR(_name, 0644, show_##_name, store_##_name)
  *********************************************************************/
 int cpufreq_get_policy(struct cpufreq_policy *policy, unsigned int cpu);
 int cpufreq_update_policy(unsigned int cpu);
-
+#ifdef VENDOR_EDIT
+unsigned int cpufreq_update_wb_hint(struct cpufreq_policy *data);
+#endif
 #ifdef CONFIG_CPU_FREQ
 /* query the current CPU frequency (in kHz). If zero, cpufreq couldn't detect it */
 unsigned int cpufreq_get(unsigned int cpu);

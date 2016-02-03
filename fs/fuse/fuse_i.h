@@ -82,6 +82,9 @@ struct fuse_inode {
 	    preserve the original mode */
 	umode_t orig_i_mode;
 
+	/** 64 bit inode number */
+	u64 orig_ino;
+
 	/** Version of last attribute change */
 	u64 attr_version;
 
@@ -100,6 +103,15 @@ struct fuse_inode {
 
 	/** List of writepage requestst (pending or sent) */
 	struct list_head writepages;
+
+	/** Miscellaneous bits describing inode state */
+	unsigned long state;
+};
+
+/** FUSE inode state bits */
+enum {
+	/** An operation changing file size is in progress  */
+	FUSE_I_SIZE_UNSTABLE,
 };
 
 struct fuse_conn;
@@ -138,6 +150,11 @@ struct fuse_file {
 
 	/** Has flock been performed on this file? */
 	bool flock:1;
+
+#ifdef VENDOR_EDIT/*Add by liwei*/
+	/* the read write file */
+	struct file *rw_lower_file;
+#endif
 };
 
 /** One input argument of a request */
@@ -310,6 +327,11 @@ struct fuse_req {
 
 	/** Request is stolen from fuse_file->reserved_req */
 	struct file *stolen_file;
+
+#ifdef VENDOR_EDIT/*Add by liwei*/
+	/** fuse shortcircuit file  */
+	struct file *private_lower_rw_file;
+#endif
 };
 
 /**
@@ -424,6 +446,11 @@ struct fuse_conn {
 
 	/** Set if bdi is valid */
 	unsigned bdi_initialized:1;
+
+#ifdef VENDOR_EDIT
+   /** Shortcircuited IO. */
+   unsigned shortcircuit_io:1;
+#endif
 
 	/*
 	 * The following bitfields are only for optimization purposes

@@ -419,7 +419,9 @@ static void cpufreq_interactive_timer(unsigned long data)
 	cpu_load = loadadjfreq / pcpu->target_freq;
 	pcpu->prev_load = cpu_load;
 	boosted = boost_val || now < boostpulse_endtime;
-
+#ifdef VENDOR_EDIT
+	__cpufreq_boost_hint_rem(data);
+#endif
 	if (cpu_load >= go_hispeed_load || boosted) {
 		if (pcpu->target_freq < hispeed_freq) {
 			new_freq = hispeed_freq;
@@ -1226,7 +1228,9 @@ static int cpufreq_governor_interactive(struct cpufreq_policy *policy,
 	unsigned int j;
 	struct cpufreq_interactive_cpuinfo *pcpu;
 	struct cpufreq_frequency_table *freq_table;
-
+#ifdef VENDOR_EDIT
+	unsigned int workload_boost_hint, inter_freq;
+#endif
 	switch (event) {
 	case CPUFREQ_GOV_START:
 		if (!cpu_online(policy->cpu))
@@ -1340,6 +1344,59 @@ static int cpufreq_governor_interactive(struct cpufreq_policy *policy,
 			up_write(&pcpu->enable_sem);
 		}
 		break;
+#ifdef VENDOR_EDIT
+	#define P_SCALE(A, B) ((A * B + 50) / 100)
+	case CPUFREQ_GOV_WBH_CAL:
+		if (!cpu_online(policy->cpu))
+			return 0;
+
+		freq_table =
+			cpufreq_frequency_get_table(policy->cpu);
+		inter_freq = __cpufreq_boost_frequency_get(policy->cpu);
+		workload_boost_hint = __cpufreq_boost_hint_get(policy->cpu);
+		__cpufreq_boost_hint_rem(policy->cpu);
+
+		if (!inter_freq)
+			inter_freq = policy->cur;
+		else/* scale back to kHZ */
+			inter_freq *= 1000;
+
+		if (workload_boost_hint && workload_boost_hint != ~0U) {
+			j = freq_to_targetload(inter_freq);
+			workload_boost_hint *= 1000;
+
+			if (inter_freq < hispeed_freq &&
+					likely(go_hispeed_load > j)) {
+				if (workload_boost_hint <
+						P_SCALE(inter_freq,
+							(go_hispeed_load - j)))
+					return 1;
+			}
+
+			workload_boost_hint += P_SCALE(inter_freq, j);
+			if (workload_boost_hint < hispeed_freq) {
+				inter_freq = (
+						workload_boost_hint *
+						100 /
+						go_hispeed_load);
+				if (!(cpufreq_frequency_table_target(
+							policy, freq_table,
+							inter_freq,
+							CPUFREQ_RELATION_L,
+							&j))) {
+					if (freq_table[j].frequency <
+								hispeed_freq)
+						return freq_table[j].frequency;
+				}
+			}
+			if (!(cpufreq_frequency_table_target(
+						policy, freq_table,
+						workload_boost_hint,
+						CPUFREQ_RELATION_L, &j)))
+				return freq_table[j].frequency;
+		}
+		break;
+#endif
 	}
 	return 0;
 }

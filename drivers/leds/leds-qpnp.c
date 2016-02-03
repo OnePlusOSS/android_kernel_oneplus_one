@@ -105,6 +105,10 @@
 #define FLASH_FAULT_DETECT(base)	(base + 0x51)
 #define FLASH_PERIPHERAL_SUBTYPE(base)	(base + 0x05)
 #define FLASH_CURRENT_RAMP(base)	(base + 0x54)
+#ifdef VENDOR_EDIT
+/* longxiaowu@camera 20150927 add to increase flash current with low battary volume TRD-3685 */
+#define FLASH1_VPH_PWR_DROOP(base)  (base + 0x5A)
+#endif
 
 #define FLASH_MAX_LEVEL			0x4F
 #define TORCH_MAX_LEVEL			0x0F
@@ -124,6 +128,14 @@
 #define FLASH_VREG_MASK			0xC0
 #define FLASH_STARTUP_DLY_MASK		0x02
 #define FLASH_CURRENT_RAMP_MASK		0xBF
+#ifdef VENDOR_EDIT
+/* longxiaowu@camera 20150927 add to increase flash current with low battary volume TRD-3685 */
+#define FLASH_VPH_PWR_DROOP_MASK    0x70
+
+#define FLASH_VPH_PWR_3_2V          0x70
+#define FLASH_VPH_PWR_3_1V          0x60
+#define FLASH_VPH_PWR_3_0V          0x50
+#endif
 
 #define FLASH_ENABLE_ALL		0xE0
 #define FLASH_ENABLE_MODULE		0x80
@@ -2580,6 +2592,20 @@ static int __devinit qpnp_flash_init(struct qpnp_led_data *led)
 			"Current ramp reg write failed(%d)\n", rc);
 		return rc;
 	}
+
+#ifdef VENDOR_EDIT
+/* longxiaowu@camera 20150927 add to increase flash current with low battary volume TRD-3685 */
+			/* Set flash vph_pwr voltage */
+			rc = qpnp_led_masked_write(led,
+				FLASH1_VPH_PWR_DROOP(led->base),
+				FLASH_VPH_PWR_DROOP_MASK,
+				FLASH_VPH_PWR_3_0V);
+			if (rc) {
+			    dev_err(&led->spmi_dev->dev,
+			"Vph_pwr droop reg write failed(%d)\n", rc);
+			return rc;
+			}
+#endif
 
 	led->flash_cfg->strobe_type = 0;
 

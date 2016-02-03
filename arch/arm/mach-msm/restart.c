@@ -100,6 +100,8 @@ static struct notifier_block panic_blk = {
 #define __LOG_BUF_LEN	(1 << CONFIG_LOG_BUF_SHIFT)
 extern char __log_buf[__LOG_BUF_LEN];
 
+extern char * get_serialno(void);
+
 typedef unsigned int	uint32;
 
 #ifdef CONFIG_VENDOR_EDIT
@@ -152,6 +154,8 @@ int oem_get_download_mode(void)
 static void set_dload_mode(int on)
 {
 	if (dload_mode_addr) {
+		char *serialno;
+		serialno = get_serialno();
 		__raw_writel(on ? 0xE47B337D : 0, dload_mode_addr);
 		__raw_writel(on ? 0xCE14091A : 0,
 		       dload_mode_addr + sizeof(unsigned int));
@@ -164,6 +168,8 @@ static void set_dload_mode(int on)
 		__raw_writel(on ? (virt_to_phys(linux_banner)): 0, dload_mode_addr + sizeof(unsigned int) *12);
 		__raw_writel(on ? (strlen(linux_banner)): 0, dload_mode_addr + sizeof(unsigned int) *13);
 		// neil end
+                __raw_writel(on ? (virt_to_phys(serialno)): 0, dload_mode_addr + sizeof(unsigned int) *14);
+                __raw_writel(on ? (strlen(serialno)): 0, dload_mode_addr + sizeof(unsigned int) *15);
 		// #endif
 		#endif
 		mb();

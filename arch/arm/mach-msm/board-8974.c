@@ -66,6 +66,7 @@ static char *saved_command_line_rf_version = NULL;
 static struct ddr_info saved_command_line_ddr_version;
 static int  current_pcb_version_num = PCB_VERSION_UNKNOWN;
 static int  current_rf_version_num = RF_VERSION_UNKNOWN;
+static char serialno[16];
 
 /* pcb_version_num: evb=10, evt=20, dvt=30, pvt=40, unkown=99 */
 int get_pcb_version(void)
@@ -76,6 +77,10 @@ int get_pcb_version(void)
 int get_rf_version(void)
 {
 	return current_rf_version_num;
+}
+char * get_serialno(void)
+{
+        return serialno;
 }
 /*Get ddr information, include ddr manufacture information and ddr row information*/
 int get_ddr_info(struct ddr_info *ddr_information){
@@ -303,7 +308,7 @@ struct kobj_attribute ftmmode_attr = {
 
 
 #ifdef VENDOR_EDIT
-/* Xiaori.Yuan@Mobile Phone Software Dept.Driver, 2014/04/12  Add for gamma correction */
+/* Mobile Phone Software Dept.Driver, 2014/04/12  Add for gamma correction */
 int gamma_index = 0;
 int __init  board_gamma_index_init(void)
 {
@@ -363,7 +368,7 @@ static ssize_t closemodem_store(struct kobject *kobj, struct kobj_attribute *att
 }
 
 #ifdef VENDOR_EDIT
-/* Xiaori.Yuan@Mobile Phone Software Dept.Driver, 2014/04/15  Add for find7s swap DSI port */
+/*Mobile Phone Software Dept.Driver, 2014/04/15  Add for find7s swap DSI port */
 int LCD_id = 0;
 int __init  board_LCD_id_index_init(void)
 {	
@@ -371,7 +376,7 @@ int __init  board_LCD_id_index_init(void)
 		LCD_id = 2;
 	else if (strstr(boot_command_line," LCD_id=4"))
 		LCD_id = 4;
-	pr_info("board_LCD_id_init, " "LCD_id= %d yxr\n", LCD_id);
+	pr_info("board_LCD_id_init, " "LCD_id= %d\n", LCD_id);
 
 	return 0;
 }
@@ -395,7 +400,7 @@ static struct attribute * g[] = {
 #endif
 /* yuyi 2013-07-15 add end*/
 #ifdef VENDOR_EDIT
-/* Xiaori.Yuan@Mobile Phone Software Dept.Driver, 2014/04/12  Add for gamma_correction */
+/* Mobile Phone Software Dept.Driver, 2014/04/12  Add for gamma_correction */
 	&gamma_index_attr.attr,
 #endif /*VENDOR_EDIT*/
 	NULL,
@@ -439,6 +444,24 @@ static int __init boot_mode_init(void)
     boot_mode[i] = '\0';
 
     printk(KERN_INFO "%s: parse boot_mode is %s\n", __func__, boot_mode);
+    return 1;
+}
+
+static int __init serialno_init(void)
+{
+    int i;
+    char *substr = strstr(boot_command_line, "androidboot.serialno=");
+    if(substr != NULL)
+        substr += strlen("androidboot.serialno=");
+    else
+        return 0;
+
+    for(i=0; substr[i] != ' '; i++) {
+        serialno[i] = substr[i];
+    }
+    serialno[i] = '\0';
+
+    printk(KERN_INFO "%s: parse serialno is %s\n", __func__, serialno);
     return 1;
 }
 //__setup("androidboot.mode=", boot_mode_setup);
@@ -577,6 +600,7 @@ void __init msm8974_init(void)
 /*  2013-09-03 zhanglong add for add interface start reason and boot_mode begin */
     start_reason_init();
     boot_mode_init();
+    serialno_init();
 /*  2013-09-03 zhanglong add for add interface start reason and boot_mode end */
 #endif //CONFIG_VENDOR_EDIT
 
@@ -593,12 +617,12 @@ void __init msm8974_init(void)
 /* yuyi 2013-07-15 add end for version*/
 
 #ifdef VENDOR_EDIT
-/* Xiaori.Yuan@Mobile Phone Software Dept.Driver, 2014/04/12  Add for gamma correction */
+/* Mobile Phone Software Dept.Driver, 2014/04/12  Add for gamma correction */
 	board_gamma_index_init();
 #endif /*VENDOR_EDIT*/
 
 #ifdef VENDOR_EDIT
-/* Xiaori.Yuan@Mobile Phone Software Dept.Driver, 2014/04/15  Add for find7s swap port */
+/* Mobile Phone Software Dept.Driver, 2014/04/15  Add for find7s swap port */
 board_LCD_id_index_init();
 #endif /*VENDOR_EDIT*/
 

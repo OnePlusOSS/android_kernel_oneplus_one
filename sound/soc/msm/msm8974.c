@@ -2000,6 +2000,18 @@ void *def_taiko_mbhc_cal(void)
 	btn_high[6] = 261;
 	btn_low[7] = 262;
 	btn_high[7] = 595;
+/*wangdongdong@MultiMediaService,2015/12/15,calibrate for 14001*/
+	if(!get_smartpa_project())
+    {
+       btn_high[3] = 230;
+       btn_low[4] = 231;
+       btn_high[4] = 232;
+       btn_low[5] = 233;
+       btn_high[5] = 234;
+       btn_low[6] = 235;
+       btn_high[6] = 236;
+       btn_low[7] = 237;
+    }
 #else
     btn_low[0] = -50;
 	btn_high[0] = 20;
@@ -2018,6 +2030,7 @@ void *def_taiko_mbhc_cal(void)
 	btn_low[7] = 270;
 	btn_high[7] = 500;
 #endif
+
 	n_ready = wcd9xxx_mbhc_cal_btn_det_mp(btn_cfg, MBHC_BTN_DET_N_READY);
 	n_ready[0] = 80;
 	n_ready[1] = 68;

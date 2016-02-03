@@ -407,6 +407,7 @@ static void synaptics_ts_probe_func(struct work_struct *w)
 static int oem_synaptics_ts_probe(struct i2c_client *client, const struct i2c_device_id *id)
 {
 	int i;
+       int offline_times = 0;//add by jiachenghui for only one cpu online,2015-9-28
 	//unsigned long flags;
 	//spinlock_t oem_lock;
 	optimize_data.client = client;
@@ -424,6 +425,7 @@ static int oem_synaptics_ts_probe(struct i2c_client *client, const struct i2c_de
                       printk("boot_time: [synaptics_ts_probe] CPU%d is %s\n",i,cpu_is_offline(i)?"offline":"online");
 			 if (cpu_is_offline(i) || i == smp_processor_id())
                       {
+                            offline_times ++;//add by jiachenghui for only one cpu online,2015-9-28
                            continue;
                       }
 			queue_delayed_work_on(i,optimize_data.workqueue,&(optimize_data.work),msecs_to_jiffies(300));
@@ -437,6 +439,10 @@ static int oem_synaptics_ts_probe(struct i2c_client *client, const struct i2c_de
 	}
 	//flush_workqueue(optimize_data.workqueue);
 	//spin_unlock_irqrestore(&oem_lock, flags);
+	//add by jiachenghui for only one cpu online,2015-9-28
+	if(offline_times == 4)
+		queue_delayed_work_on(smp_processor_id(),optimize_data.workqueue,&(optimize_data.work),msecs_to_jiffies(300));
+       //add by jiachenghui for only one cpu online,2015-9-28
 	return probe_ret;
 }
 #endif /*VENDOR_EDIT*/

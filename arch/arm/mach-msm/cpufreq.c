@@ -73,6 +73,20 @@ struct cpufreq_suspend_t {
 
 static DEFINE_PER_CPU(struct cpufreq_suspend_t, cpufreq_suspend);
 
+#ifdef VENDOR_EDIT
+struct workload_store_t {
+	bool kicked_off:1;
+	struct mutex lock;
+	ktime_t last_update;
+	unsigned int freq;
+	u64 accum_area;
+	unsigned int boost_hint;
+	u64 mig_num;
+};
+
+static DEFINE_PER_CPU(struct workload_store_t, workload_store);
+#endif
+
 unsigned long msm_cpufreq_get_bw(void)
 {
 	return mem_bw[max_freq_index];
@@ -134,6 +148,21 @@ static int set_cpu_freq(struct cpufreq_policy *policy, unsigned int new_freq,
 
 	cpufreq_notify_transition(&freqs, CPUFREQ_PRECHANGE);
 
+#ifdef VENDOR_EDIT
+	if (per_cpu(workload_store, policy->cpu).kicked_off) {
+		ktime_t curr, rem;
+		mutex_lock(&per_cpu(workload_store, policy->cpu).lock);
+		curr = ktime_get_boottime();
+		rem = ktime_sub(curr,
+			per_cpu(workload_store, policy->cpu).last_update);
+		per_cpu(workload_store, policy->cpu).accum_area +=
+			ktime_to_us(rem) * (freqs.old / 1000);
+		per_cpu(workload_store, policy->cpu).last_update = curr;
+		per_cpu(workload_store, policy->cpu).freq = freqs.new / 1000;
+		mutex_unlock(&per_cpu(workload_store, policy->cpu).lock);
+	}
+#endif
+
 	trace_cpu_frequency_switch_start(freqs.old, freqs.new, policy->cpu);
 	if (is_clk) {
 		unsigned long rate = new_freq * 1000;
@@ -169,6 +198,89 @@ static void set_cpu_work(struct work_struct *work)
 					cpu_work->index);
 	complete(&cpu_work->complete);
 }
+
+#ifdef VENDOR_EDIT
+static int msm_cpufreq_workload_sum(unsigned int cpu, ktime_t *base, u64 *sum)
+{
+	int ret = -EFAULT;
+
+	if (per_cpu(workload_store, cpu).kicked_off) {
+		/* these three data might be un-sync'd, but we need lock-free */
+		u64 accum_area = per_cpu(workload_store, cpu).accum_area;
+		unsigned int freq = per_cpu(workload_store, cpu).freq;
+		ktime_t last_update = per_cpu(workload_store, cpu).last_update;
+
+		if (ktime_compare(*base, last_update) > 0) {
+			ktime_t rem = ktime_sub(*base, last_update);
+			*sum = accum_area + freq * ktime_to_us(rem);
+
+		} else
+			*sum = accum_area;
+
+		return 0;
+	}
+
+	return ret;
+}
+
+static void workload_update(unsigned int cpu)
+{
+	if (per_cpu(workload_store, cpu).kicked_off) {
+		ktime_t curr, rem;
+		mutex_lock(&per_cpu(workload_store, cpu).lock);
+		curr = ktime_get_boottime();
+		rem = ktime_sub(curr,
+			per_cpu(workload_store, cpu).last_update);
+		per_cpu(workload_store, cpu).accum_area +=
+			ktime_to_us(rem) * per_cpu(workload_store, cpu).freq;
+		per_cpu(workload_store, cpu).last_update = curr;
+		mutex_unlock(&per_cpu(workload_store, cpu).lock);
+	}
+}
+
+static u64 msm_cpufreq_boost_hint_add(unsigned int cpu, unsigned int freq)
+{
+	if (per_cpu(workload_store, cpu).kicked_off) {
+		per_cpu(workload_store, cpu).boost_hint += freq;
+		return per_cpu(workload_store, cpu).mig_num;
+	}
+	return ~0U;
+}
+
+static void msm_cpufreq_boost_hint_sub(unsigned int cpu,
+					unsigned int freq,
+					u64 tag)
+{
+	if (per_cpu(workload_store, cpu).kicked_off &&
+			per_cpu(workload_store, cpu).boost_hint >= freq &&
+			per_cpu(workload_store, cpu).mig_num == tag)
+		per_cpu(workload_store, cpu).boost_hint -= freq;
+}
+
+static unsigned int msm_cpufreq_boost_hint_get(unsigned int cpu)
+{
+	if (per_cpu(workload_store, cpu).kicked_off)
+		return per_cpu(workload_store, cpu).boost_hint;
+
+	return ~0U;
+}
+
+static void msm_cpufreq_boost_hint_rem(unsigned int cpu)
+{
+	if (per_cpu(workload_store, cpu).kicked_off) {
+		per_cpu(workload_store, cpu).boost_hint = 0;
+		per_cpu(workload_store, cpu).mig_num++;
+	}
+}
+
+static unsigned int msm_cpufreq_frequency_get(unsigned int cpu)
+{
+	if (per_cpu(workload_store, cpu).kicked_off)
+		return per_cpu(workload_store, cpu).freq;
+
+	return 0;
+}
+#endif
 
 static int msm_cpufreq_target(struct cpufreq_policy *policy,
 				unsigned int target_freq,
@@ -300,6 +412,16 @@ static int __cpuinit msm_cpufreq_init(struct cpufreq_policy *policy)
 			policy->cpu, cur_freq, table[index].frequency);
 	policy->cur = table[index].frequency;
 
+#ifdef VENDOR_EDIT
+	per_cpu(workload_store, policy->cpu).kicked_off = 1;
+	mutex_init(&(per_cpu(workload_store, policy->cpu).lock));
+	per_cpu(workload_store, policy->cpu).last_update = ktime_get_boottime();
+	per_cpu(workload_store, policy->cpu).freq = 0;
+	per_cpu(workload_store, policy->cpu).accum_area = 0;
+	per_cpu(workload_store, policy->cpu).boost_hint = 0;
+	per_cpu(workload_store, policy->cpu).mig_num = 0;
+#endif
+
 	policy->cpuinfo.transition_latency =
 		acpuclk_get_switch_time() * NSEC_PER_USEC;
 
@@ -315,6 +437,16 @@ static int __cpuinit msm_cpufreq_cpu_callback(struct notifier_block *nfb,
 	switch (action & ~CPU_TASKS_FROZEN) {
 	case CPU_ONLINE:
 		per_cpu(cpufreq_suspend, cpu).device_suspended = 0;
+#ifdef VENDOR_EDIT
+		if (per_cpu(workload_store, cpu).kicked_off) {
+			mutex_lock(&per_cpu(workload_store, cpu).lock);
+			per_cpu(workload_store, cpu).last_update =
+							ktime_get_boottime();
+			per_cpu(workload_store, cpu).boost_hint = 0;
+			per_cpu(workload_store, cpu).mig_num++;
+			mutex_unlock(&per_cpu(workload_store, cpu).lock);
+		}
+#endif
 		break;
 	case CPU_DOWN_PREPARE:
 		mutex_lock(&per_cpu(cpufreq_suspend, cpu).suspend_mutex);
@@ -334,6 +466,9 @@ static int __cpuinit msm_cpufreq_cpu_callback(struct notifier_block *nfb,
 			clk_disable_unprepare(l2_clk);
 			update_l2_bw(NULL);
 		}
+#ifdef VENDOR_EDIT
+		workload_update(cpu);
+#endif
 		break;
 	case CPU_UP_CANCELED:
 		if (is_clk) {
@@ -416,6 +551,14 @@ static struct cpufreq_driver msm_cpufreq_driver = {
 	.get		= msm_cpufreq_get_freq,
 	.suspend	= msm_cpufreq_suspend,
 	.resume		= msm_cpufreq_resume,
+#ifdef VENDOR_EDIT
+	.workload_sum = msm_cpufreq_workload_sum,
+	.boost_hint_add = msm_cpufreq_boost_hint_add,
+	.boost_hint_sub = msm_cpufreq_boost_hint_sub,
+	.boost_hint_get = msm_cpufreq_boost_hint_get,
+	.boost_hint_rem = msm_cpufreq_boost_hint_rem,
+	.boost_frequency_get = msm_cpufreq_frequency_get,
+#endif
 	.name		= "msm",
 	.attr		= msm_freq_attr,
 };

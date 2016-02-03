@@ -1998,9 +1998,6 @@ static int report_cc_based_soc(struct qpnp_bms_chip *chip)
 			soc_change = min((int)abs(chip->last_soc - soc),
 					time_since_last_change_sec / soc_change_per_sec);
 
-			if (chip->last_soc == 100 && soc > 95 && soc_change > 0) {
-				soc_change = 1;
-			}
 		}
 //
 		else {
@@ -3640,7 +3637,10 @@ static void battery_status_check(struct qpnp_bms_chip *chip)
 		} else if (chip->battery_status
 				== POWER_SUPPLY_STATUS_FULL) {
 			pr_info("battery not full any more\n");
-
+#ifdef CONFIG_VENDOR_EDIT
+			get_current_time(&(chip->last_recalc_time));
+			chip->last_soc_change_sec = chip->last_recalc_time;
+#endif
 			disable_bms_irq(&chip->ocv_thr_irq);
 			disable_bms_irq(&chip->sw_cc_thr_irq);
 		}
@@ -3716,7 +3716,15 @@ static void battery_insertion_check(struct qpnp_bms_chip *chip)
 /* Returns capacity as a SoC percentage between 0 and 100 */
 static int get_prop_bms_capacity(struct qpnp_bms_chip *chip)
 {
+#ifdef CONFIG_VENDOR_EDIT
+
+	if (chip->last_soc == chip->calculated_soc)
+		return chip->last_soc;
+	else
+		return report_state_of_charge(chip);
+#else
 	return report_state_of_charge(chip);
+#endif
 }
 
 static void qpnp_bms_external_power_changed(struct power_supply *psy)

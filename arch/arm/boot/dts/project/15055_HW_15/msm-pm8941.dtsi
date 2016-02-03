@@ -218,9 +218,9 @@
 		qcom,ibatsafe-ma = <1500>;
 		qcom,thermal-mitigation = <1800 1500 1200 1000 800>;
 		qcom,cool-bat-decidegc = <120>;
-		qcom,cool-bat-mv = <4180>;
+		qcom,cool-bat-mv = <4320>;
 		qcom,ibatmax-warm-ma = <500>;
-		qcom,warm-bat-decidegc = <430>;
+		qcom,warm-bat-decidegc = <450>;
 		qcom,warm-bat-mv = <4080>;
 		qcom,ibatmax-cool-ma = <500>;
 //#ifdef CONFIG_VENDOR_EDIT

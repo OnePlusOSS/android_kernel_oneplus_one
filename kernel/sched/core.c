@@ -87,6 +87,15 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/sched.h>
 
+#ifdef VENDOR_EDIT
+#include <linux/cpufreq.h>
+#endif
+
+#ifdef VENDOR_EDIT
+//add by huruihuan for tradeoff performence and power
+#include <linux/oneplus.h>
+#endif
+
 ATOMIC_NOTIFIER_HEAD(migration_notifier_head);
 
 void start_bandwidth_timer(struct hrtimer *period_timer, ktime_t period)
@@ -1670,9 +1679,31 @@ stat:
 out:
 	raw_spin_unlock_irqrestore(&p->pi_lock, flags);
 
-	if (notify)
-		atomic_notifier_call_chain(&migration_notifier_head,
-					   cpu, (void *)src_cpu);
+#ifdef VENDOR_EDIT
+	if (notify)	{
+		if (p->optimal_boost_freq) {
+			__cpufreq_boost_hint_sub(src_cpu,
+				p->boost_sub_freq, p->mig_tag);
+			p->mig_tag = __cpufreq_boost_hint_add(
+						cpu,
+						p->optimal_boost_freq);
+			p->boost_sub_freq = p->optimal_boost_freq;
+		}
+//add by huruihuan for tradeoff performence and power 
+        if(boost_game_only) {
+            if(p->game_flag == PROCESS_RENDER_THREAD)
+                atomic_notifier_call_chain(&migration_notifier_head,
+                            cpu, (void *)src_cpu);
+        }
+        else
+            atomic_notifier_call_chain(&migration_notifier_head,
+                        cpu, (void *)src_cpu);
+    }
+#else
+    if (notify)
+        atomic_notifier_call_chain(&migration_notifier_head,
+                        cpu, (void *)src_cpu);
+#endif
 	return success;
 }
 
@@ -3209,6 +3240,77 @@ pick_next_task(struct rq *rq)
 	BUG(); /* the idle class will always have a runnable task */
 }
 
+#ifdef VENDOR_EDIT
+/*align jiffy is better*/
+#define BOOST_DEDUCTION_MIN_US  (USEC_PER_SEC/HZ)
+#define RESPECTED_MAX_US        (BOOST_DEDUCTION_MIN_US * 10)
+void workload_sync_checkpoint(
+	struct rq *rq,
+	struct task_struct *prev,
+	struct task_struct *next) {
+	u64 sum = 0ULL;
+	s64 dis;
+	u64 boost_hint;
+	ktime_t initial = ktime_set(0, 0);
+	ktime_t curr = ktime_get_boottime();
+	int wlret = __cpufreq_workload_sum(cpu_of(rq), &curr, &sum);
+
+	/* out */
+	if (prev != rq->idle && prev != rq->stop && !wlret) {
+		if (ktime_equal(prev->base, initial)) {
+			prev->base = curr;
+			prev->accum_area_tag = sum;
+			prev->accum_total = 0;
+			prev->mig_tag = 0;
+		} else if (sum > prev->accum_area_tag) {
+			prev->accum_total += (sum - prev->accum_area_tag);
+			prev->accum_area_tag = sum;
+			dis = ktime_to_us(ktime_sub(curr, prev->base));
+			if (dis >= BOOST_DEDUCTION_MIN_US) {
+				boost_hint = prev->accum_total + (dis >> 1);
+				boost_hint = div64_u64(boost_hint, dis);
+				if (prev->optimal_boost_freq) {
+					prev->optimal_boost_freq >>= 1;
+					boost_hint >>= 1;
+				}
+				prev->optimal_boost_freq += boost_hint;
+				prev->base = curr;
+				prev->accum_total = 0;
+			}
+		}
+	}
+
+	/* in */
+	if (next != rq->idle && next != rq->stop && !wlret) {
+		if (ktime_equal(next->base, initial)) {
+			next->base = curr;
+			next->accum_area_tag = sum;
+			next->accum_total = 0;
+			next->mig_tag = 0;
+		} else if (sum > next->accum_area_tag) {
+			s64 dis = ktime_to_us(ktime_sub(curr, next->base));
+			if (dis >= RESPECTED_MAX_US) {
+				next->optimal_boost_freq = 0;
+				next->boost_sub_freq = 0;
+				next->base = curr;
+				next->accum_total = 0;
+			} else if (dis >= BOOST_DEDUCTION_MIN_US) {
+				boost_hint = next->accum_total + (dis >> 1);
+				boost_hint = div64_u64(boost_hint, dis);
+				if (next->optimal_boost_freq) {
+					next->optimal_boost_freq >>= 1;
+					boost_hint >>= 1;
+				}
+				next->optimal_boost_freq += boost_hint;
+				next->base = curr;
+				next->accum_total = 0;
+			}
+			next->accum_area_tag = sum;
+		}
+	}
+}
+#endif
+
 /*
  * __schedule() is the main scheduler function.
  */
@@ -3266,6 +3368,10 @@ need_resched:
 	next = pick_next_task(rq);
 	clear_tsk_need_resched(prev);
 	rq->skip_clock_update = 0;
+
+#ifdef VENDOR_EDIT
+	workload_sync_checkpoint(rq, prev, next);
+#endif
 
 	if (likely(prev != next)) {
 		rq->nr_switches++;
@@ -5134,9 +5240,31 @@ done:
 fail:
 	double_rq_unlock(rq_src, rq_dest);
 	raw_spin_unlock(&p->pi_lock);
+#ifdef VENDOR_EDIT
+	if (moved && task_notify_on_migrate(p)) {
+		if (p->optimal_boost_freq) {
+			__cpufreq_boost_hint_sub(src_cpu,
+					p->boost_sub_freq, p->mig_tag);
+			p->mig_tag = __cpufreq_boost_hint_add(
+						dest_cpu,
+						p->optimal_boost_freq);
+			p->boost_sub_freq = p->optimal_boost_freq;
+		}
+//add by huruihuan for tradeoff performence and power 
+        if(boost_game_only) {
+            if(p->game_flag == PROCESS_RENDER_THREAD)
+                atomic_notifier_call_chain(&migration_notifier_head,
+                                dest_cpu, (void *)src_cpu);
+        }
+        else
+            atomic_notifier_call_chain(&migration_notifier_head,
+                            dest_cpu, (void *)src_cpu);
+    }
+#else
 	if (moved && task_notify_on_migrate(p))
 		atomic_notifier_call_chain(&migration_notifier_head,
-					   dest_cpu, (void *)src_cpu);
+						dest_cpu, (void *)src_cpu);
+#endif
 	return ret;
 }
 

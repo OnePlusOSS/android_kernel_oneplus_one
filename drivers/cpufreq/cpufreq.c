@@ -1512,6 +1512,88 @@ int cpufreq_unregister_notifier(struct notifier_block *nb, unsigned int list)
 }
 EXPORT_SYMBOL(cpufreq_unregister_notifier);
 
+#ifdef VENDOR_EDIT
+int __cpufreq_workload_sum(unsigned int cpu, ktime_t *base, u64 *sum)
+{
+	int retval = -EINVAL;
+
+	if (cpufreq_disabled())
+		return -ENODEV;
+
+	if (cpu_online(cpu) && cpufreq_driver &&
+			cpufreq_driver->workload_sum)
+		retval = cpufreq_driver->workload_sum(cpu, base, sum);
+
+	return retval;
+}
+EXPORT_SYMBOL_GPL(__cpufreq_workload_sum);
+
+u64 __cpufreq_boost_hint_add(unsigned int cpu, unsigned int freq)
+{
+	if (cpufreq_disabled())
+		return ~0U;
+
+	if (cpu_online(cpu) && cpufreq_driver &&
+			cpufreq_driver->boost_hint_add)
+		return cpufreq_driver->boost_hint_add(cpu, freq);
+
+	return ~0U;
+}
+EXPORT_SYMBOL_GPL(__cpufreq_boost_hint_add);
+
+void __cpufreq_boost_hint_sub(unsigned int cpu, unsigned int freq, u64 tag)
+{
+	if (cpufreq_disabled())
+		return;
+
+	if (cpu_online(cpu) && cpufreq_driver &&
+		cpufreq_driver->boost_hint_sub)
+		cpufreq_driver->boost_hint_sub(cpu, freq, tag);
+}
+EXPORT_SYMBOL_GPL(__cpufreq_boost_hint_sub);
+
+unsigned int __cpufreq_boost_hint_get(unsigned int cpu)
+{
+	unsigned int retval = ~0U;
+
+	if (cpufreq_disabled())
+		return retval;
+
+	if (cpu_online(cpu) && cpufreq_driver
+		&& cpufreq_driver->boost_hint_get)
+		return cpufreq_driver->boost_hint_get(cpu);
+
+	return retval;
+}
+EXPORT_SYMBOL_GPL(__cpufreq_boost_hint_get);
+
+void __cpufreq_boost_hint_rem(unsigned int cpu)
+{
+	if (cpufreq_disabled())
+		return;
+
+	if (cpu_online(cpu) && cpufreq_driver &&
+		cpufreq_driver->boost_hint_rem)
+		cpufreq_driver->boost_hint_rem(cpu);
+}
+EXPORT_SYMBOL_GPL(__cpufreq_boost_hint_rem);
+
+unsigned int __cpufreq_boost_frequency_get(unsigned int cpu)
+{
+	unsigned int retval = 0;
+
+	if (cpufreq_disabled())
+		return retval;
+
+	if (cpu_online(cpu) && cpufreq_driver &&
+		cpufreq_driver->boost_frequency_get)
+		return cpufreq_driver->boost_frequency_get(cpu);
+
+	return retval;
+}
+EXPORT_SYMBOL_GPL(__cpufreq_boost_frequency_get);
+#endif
+
 
 /*********************************************************************
  *                              GOVERNORS                            *
@@ -1857,7 +1939,12 @@ no_policy:
 	return ret;
 }
 EXPORT_SYMBOL(cpufreq_update_policy);
-
+#ifdef VENDOR_EDIT
+unsigned int cpufreq_update_wb_hint(struct cpufreq_policy *data)
+{
+	return __cpufreq_governor(data, CPUFREQ_GOV_WBH_CAL);
+}
+#endif
 static int __cpuinit cpufreq_cpu_callback(struct notifier_block *nfb,
 					unsigned long action, void *hcpu)
 {

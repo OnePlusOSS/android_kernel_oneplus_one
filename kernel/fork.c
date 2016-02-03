@@ -317,6 +317,15 @@ static struct task_struct *dup_task_struct(struct task_struct *orig)
 
 	account_kernel_stack(ti, 1);
 
+#ifdef VENDOR_EDIT
+	tsk->base = ktime_set(0, 0);
+	tsk->accum_total = 0;
+	tsk->accum_area_tag = 0;
+	tsk->optimal_boost_freq = 0;
+	tsk->mig_tag = 0;
+	tsk->boost_sub_freq = 0;
+#endif
+
 	return tsk;
 
 out:
